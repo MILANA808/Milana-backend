@@ -1,0 +1,79 @@
+openapi: 3.0.3
+info:
+  title: Milana Backend (AKSI)
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /eqs/score:
+    post:
+      summary: Compute EQS from text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+              required: [text]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  score:
+                    type: number
+                  polarity:
+                    type: number
+                  subjectivity:
+                    type: number
+  /psi/state:
+    post:
+      summary: Update/return Ψ-state snapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                omega:
+                  type: number
+                  default: 1.0
+                phi:
+                  type: number
+                  default: 0.0
+                amplitude:
+                  type: number
+                  default: 1.0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  psi:
+                    type: number
+                  omega:
+                    type: number
+                  phi:
+                    type: number
