@@ -1,0 +1,19 @@
+name: preview-deploy
+
+on:
+  push:
+    branches: [ "aksi/infra-bootstrap" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Launch ephemeral preview with uvicorn
+        run: |
+          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          echo "Preview started on ephemeral runner port 8000"
+          sleep 5
+          curl -sSf http://127.0.0.1:8000/health
