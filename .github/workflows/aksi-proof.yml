@@ -1,0 +1,32 @@
+name: AKSI Proof
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute SHA256 proof
+        run: |
+          echo "# AKSI Proof (SHA256)" > PROOF_SHA256.txt
+          date -u +%Y-%m-%dT%H:%M:%SZ >> PROOF_SHA256.txt
+          echo >> PROOF_SHA256.txt
+          for f in AKSI-Manifest.md app/main.py render.yaml Dockerfile; do
+            if [ -f "$f" ]; then
+              sha256sum "$f" >> PROOF_SHA256.txt || shasum -a 256 "$f" >> PROOF_SHA256.txt;
+            fi
+          done
+      - name: Commit proof file
+        run: |
+          git config user.name "AKSI Bot"
+          git config user.email "aksi-bot@noreply"
+          git add PROOF_SHA256.txt
+          git commit -m "chore(aksi): refresh PROOF_SHA256.txt" || echo "No changes"
+          git push
