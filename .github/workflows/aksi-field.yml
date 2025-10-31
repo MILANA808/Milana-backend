@@ -1,0 +1,30 @@
+name: AKSI Field
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  aggregate:
+    if: contains(github.event.issue.labels.*.name, 'dialog')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Aggregate dialogs to data/state.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python -m pip install --upgrade pip requests
+          python scripts/aggregate_dialogs.py
+      - name: Commit state.json
+        run: |
+          git config user.name "AKSI Bot"
+          git config user.email "aksi-bot@noreply"
+          git add data/state.json
+          git commit -m "chore(aksi): update state.json from dialog issues" || echo "No changes"
+          git push
