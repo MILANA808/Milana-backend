@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>AKSI Backend</title>
+<style>body{font-family:system-ui,Arial;margin:2rem}</style>
+<h1>AKSI Backend</h1>
+<p>Redirecting to the live backend…</p>
+<script>
+fetch('endpoint.json',{cache:'no-store'})
+  .then(r=>r.json())
+  .then(j=>{ if(j.url) location.replace(j.url + '/docs'); })
+  .catch(()=>document.body.innerHTML='<h2>No active endpoint</h2><p>Retry in a minute.</p>');
+</script>
