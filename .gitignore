@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.venv/
+PROOF_SHA256.txt

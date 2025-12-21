@@ -1,0 +1,11 @@
+{
+  "services": [
+    {
+      "name": "milana-backend",
+      "builder": "Docker",
+      "envVars": [
+        { "key": "PORT", "value": "8000" }
+      ]
+    }
+  ]
+}
