@@ -1,0 +1,34 @@
+# FastAPI and web framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.0
+
+# HTTP client for external API calls
+httpx==0.26.0
+requests==2.31.0
+
+# GitHub API
+PyGithub==2.1.1
+
+# Vector DB client (Qdrant)
+qdrant-client==1.11.3
+
+# Elasticsearch client
+elasticsearch==8.11.0
+
+# Data processing
+numpy>=1.26.2
+pandas>=2.1.0
+
+# Testing
+pytest==7.4.0
+pytest-asyncio==0.21.0
+pytest-cov==4.1.0
+
+# Code quality
+black==24.1.0
+ruff==0.1.0
+mypy==1.8.0
+
+# Environment management
+python-dotenv==1.0.0
