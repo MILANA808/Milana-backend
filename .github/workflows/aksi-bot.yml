@@ -1,0 +1,115 @@
+name: AKSI Bot Automation
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Command to execute'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  aksi-bot:
+    # Run on issue comments with /solve or /aksi, or on new issues/PRs, or manual dispatch
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'issues' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       (contains(github.event.comment.body, '/solve') || contains(github.event.comment.body, '/aksi')))
+
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AKSI_PAT: ${{ secrets.AKSI_PAT }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AKSI_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install PyGithub requests
+
+      - name: Parse command
+        id: parse
+        run: |
+          # Determine the command source
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            COMMAND="${{ github.event.inputs.command }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            COMMAND="${{ github.event.comment.body }}"
+          elif [ "${{ github.event_name }}" = "issues" ]; then
+            COMMAND="auto_triage"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            COMMAND="auto_review"
+          else
+            COMMAND=""
+          fi
+
+          echo "command=$COMMAND" >> $GITHUB_OUTPUT
+          echo "event=${{ github.event_name }}" >> $GITHUB_OUTPUT
+
+          # Extract /solve command if present
+          if echo "$COMMAND" | grep -q "/solve"; then
+            ISSUE_URL=$(echo "$COMMAND" | sed -n 's#.*/solve \+\([^ ]*\).*#\1#p' | head -n1)
+            echo "issue_url=$ISSUE_URL" >> $GITHUB_OUTPUT
+            echo "action=solve" >> $GITHUB_OUTPUT
+          elif echo "$COMMAND" | grep -q "/aksi"; then
+            AKSI_CMD=$(echo "$COMMAND" | sed -n 's#.*/aksi \+\([^ ]*\).*#\1#p' | head -n1)
+            echo "aksi_command=$AKSI_CMD" >> $GITHUB_OUTPUT
+            echo "action=aksi" >> $GITHUB_OUTPUT
+          else
+            echo "action=auto" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Execute AKSI Bot
+        if: steps.parse.outputs.action == 'solve' || steps.parse.outputs.action == 'aksi'
+        run: |
+          python .github/scripts/aksi_bot.py \
+            --action "${{ steps.parse.outputs.action }}" \
+            --issue-url "${{ steps.parse.outputs.issue_url }}" \
+            --event "${{ steps.parse.outputs.event }}" \
+            --repo "${{ github.repository }}" \
+            --comment-id "${{ github.event.comment.id }}" \
+            --issue-number "${{ github.event.issue.number }}"
+
+      - name: Auto Triage Issue
+        if: steps.parse.outputs.action == 'auto' && github.event_name == 'issues'
+        run: |
+          python .github/scripts/auto_triage.py \
+            --repo "${{ github.repository }}" \
+            --issue-number "${{ github.event.issue.number }}" \
+            --issue-title "${{ github.event.issue.title }}" \
+            --issue-body "${{ github.event.issue.body }}"
+
+      - name: Log activity
+        run: |
+          echo "AKSI Bot execution completed"
+          echo "Action: ${{ steps.parse.outputs.action }}"
+          echo "Event: ${{ github.event_name }}"
