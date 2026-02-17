@@ -1,4 +1,4 @@
-// globe.js — 3D визуализация Земли с объектами, цветами ролей и тепловой картой
+// globe.js — 3D визуализация Земли с объектами, цветами ролей, тепловой картой и Resonance Field
 
 // Цвета по роли объекта
 const roleColors = {
@@ -11,6 +11,9 @@ const roleColors = {
 
 // Тепловые точки накопленные от сервера
 let hotspots = [];
+
+// Текущий уровень резонанса (0..1)
+let currentResonance = 0;
 
 // Конвертация lat/lng → canvas xy для глобуса
 function latLngToXY(lat, lng, cx, cy, rx, ry) {
@@ -66,6 +69,20 @@ export function drawGlobe() {
     ctx.fillStyle = gradient;
     ctx.fill();
 
+    // Resonance Field аура вокруг глобуса (при высоком резонансе)
+    if (currentResonance > 0.4) {
+        const hue = Math.round(currentResonance * 240); // red → blue
+        const alpha = (currentResonance - 0.4) * 0.4;
+        const auraGrad = ctx.createRadialGradient(cx, cy, rx * 0.95, cx, cy, rx * 1.25);
+        auraGrad.addColorStop(0, `hsla(${hue}, 80%, 60%, ${alpha})`);
+        auraGrad.addColorStop(1, "rgba(0,0,0,0)");
+
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx * 1.25, ry * 1.25, 0, 0, Math.PI * 2);
+        ctx.fillStyle = auraGrad;
+        ctx.fill();
+    }
+
     // Тепловая карта (рисуем поверх Земли, до сетки)
     if (hotspots.length > 0) {
         const maxVal = Math.max(...hotspots.map(h => h.value), 1);
@@ -120,7 +137,7 @@ export function updateObjects(objects) {
     const canvas = document.getElementById("globe");
     const ctx = canvas.getContext("2d");
 
-    // Перерисовываем глобус (включая тепловую карту)
+    // Перерисовываем глобус (включая тепловую карту и ауру резонанса)
     drawGlobe();
 
     if (!objects || objects.length === 0) return;
@@ -136,13 +153,15 @@ export function updateObjects(objects) {
         // Цвет по роли
         const color = roleColors[o.role] || roleColors.default;
 
-        // Свечение
-        const glow = ctx.createRadialGradient(x, y, 0, x, y, 10);
+        // Усиленный glow при высоком резонансе
+        const glowRadius = currentResonance > 0.7 ? 16 : 10;
+
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, glowRadius);
         glow.addColorStop(0, color.glow);
         glow.addColorStop(1, "rgba(0, 0, 0, 0)");
 
         ctx.beginPath();
-        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
         ctx.fillStyle = glow;
         ctx.fill();
 
@@ -151,7 +170,7 @@ export function updateObjects(objects) {
         ctx.arc(x, y, 3, 0, Math.PI * 2);
         ctx.fillStyle = color.fill;
         ctx.shadowColor = color.fill;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = currentResonance > 0.7 ? 18 : 10;
         ctx.fill();
         ctx.shadowBlur = 0;
     });
@@ -162,4 +181,9 @@ export function updateHeatmap(data) {
     if (data && Array.isArray(data)) {
         hotspots = data;
     }
+}
+
+// Обновить текущий уровень резонанса для рендеринга
+export function setResonance(val) {
+    currentResonance = val || 0;
 }

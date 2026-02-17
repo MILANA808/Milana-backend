@@ -153,3 +153,214 @@ body {
     border-radius: 4px;
     background: rgba(0, 20, 40, 0.8);
 }
+
+/* ===== Resonance Field ===== */
+.resonance-value {
+    font-size: 15px;
+    font-weight: bold;
+    transition: color 0.5s ease;
+}
+
+@keyframes resonancePulse {
+    0%, 100% { text-shadow: 0 0 6px currentColor; opacity: 1; }
+    50% { text-shadow: 0 0 18px currentColor, 0 0 30px currentColor; opacity: 0.85; }
+}
+
+.resonance-pulse {
+    animation: resonancePulse 0.8s ease-in-out infinite;
+}
+
+.resonance-bar-wrap {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    margin: 4px 0 2px;
+    overflow: hidden;
+}
+
+.resonance-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease, background 0.5s ease;
+}
+
+/* ===== Общий стиль боковых панелей ===== */
+.side-panel {
+    position: fixed;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 0 15px rgba(0, 200, 255, 0.08);
+    min-width: 200px;
+}
+
+/* ===== DIMAX v3 панель (левый нижний угол) ===== */
+.dimax-panel-pos {
+    bottom: 20px;
+    left: 20px;
+}
+
+.dimax-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.dimax-axis {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3px 0;
+}
+
+.da-label {
+    font-size: 9px;
+    color: rgba(0, 200, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.da-val {
+    font-size: 12px;
+    color: #00ccff;
+    font-weight: bold;
+}
+
+.dimax-bar-wrap {
+    width: 100%;
+    height: 3px;
+    background: rgba(0, 200, 255, 0.15);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+.dimax-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #0044ff, #00ccff);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+/* ===== Memory AKSI панель (левый верхний угол) ===== */
+.memory-panel-pos {
+    top: 20px;
+    left: 20px;
+}
+
+.replay-btn {
+    background: rgba(0, 200, 100, 0.15);
+    border: 1px solid rgba(0, 200, 100, 0.4);
+    color: #00ff80;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s;
+}
+
+.replay-btn:hover {
+    background: rgba(0, 200, 100, 0.3);
+}
+
+.replay-status {
+    font-size: 10px;
+    color: #aaa;
+    margin-top: 6px;
+    line-height: 1.5;
+    min-height: 16px;
+}
+
+/* ===== Semantic Search панель (снизу по центру) ===== */
+.search-panel {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 0 15px rgba(0, 200, 255, 0.08);
+    min-width: 300px;
+    max-width: 420px;
+}
+
+.search-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.search-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 4px;
+    color: #00ff80;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 4px 8px;
+    outline: none;
+}
+
+.search-input::placeholder {
+    color: rgba(0, 200, 255, 0.35);
+}
+
+.search-btn {
+    background: rgba(0, 200, 100, 0.15);
+    border: 1px solid rgba(0, 200, 100, 0.4);
+    color: #00ff80;
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.search-btn:hover {
+    background: rgba(0, 200, 100, 0.3);
+}
+
+.search-results {
+    margin-top: 6px;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+.search-result {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    padding: 2px 4px;
+    border-left: 2px solid rgba(0, 200, 255, 0.4);
+    margin: 2px 0;
+    color: #00ccff;
+}
+
+.sr-type {
+    color: #ffaa00;
+    font-weight: bold;
+    margin-right: 6px;
+}
+
+.sr-label {
+    flex: 1;
+    color: rgba(0, 200, 255, 0.8);
+}
+
+.sr-score {
+    color: #00ff80;
+    font-size: 10px;
+}
