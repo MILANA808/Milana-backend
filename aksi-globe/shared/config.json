@@ -1,0 +1,16 @@
+{
+  "name": "AKSI Globe",
+  "version": "1.0.0",
+  "description": "Real-time 3D Earth visualization with AI-driven objects and metrics",
+  "server": {
+    "port": 3000,
+    "updateInterval": 1000
+  },
+  "ai": {
+    "maxObjects": 20,
+    "movementSpeed": 0.2
+  },
+  "globe": {
+    "earthSurfaceArea": 510
+  }
+}
