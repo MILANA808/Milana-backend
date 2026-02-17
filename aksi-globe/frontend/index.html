@@ -7,12 +7,38 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Основная панель метрик (правый верхний угол) -->
 <div id="ui"></div>
+
+<!-- Canvas глобуса -->
 <canvas id="globe"></canvas>
+
+<!-- История AKSI (правый нижний угол) -->
 <div id="history-panel">
     <div class="history-title">История AKSI</div>
     <canvas id="history-chart"></canvas>
 </div>
+
+<!-- DIMAX v3 панель (левый нижний угол) -->
+<div id="dimax-panel" class="side-panel dimax-panel-pos"></div>
+
+<!-- Memory_AKSI: Replay (левый верхний угол) -->
+<div id="memory-panel" class="side-panel memory-panel-pos">
+    <div class="history-title">Memory AKSI</div>
+    <button id="replay-btn" class="replay-btn">&#9654; Replay memory</button>
+    <div id="replay-status" class="replay-status"></div>
+</div>
+
+<!-- Semantic Search панель (снизу по центру) -->
+<div id="search-panel" class="search-panel">
+    <div class="history-title">Semantic search events</div>
+    <div class="search-row">
+        <input id="search-input" type="text" placeholder="scout surge, aksi peak..." class="search-input">
+        <button id="search-btn" class="search-btn">&#128269;</button>
+    </div>
+    <div id="search-results" class="search-results"></div>
+</div>
+
 <script src="/socket.io/socket.io.js"></script>
 <script type="module" src="main.js"></script>
 </body>

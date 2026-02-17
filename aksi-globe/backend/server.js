@@ -8,6 +8,9 @@ const aksiCore = require("./aksi-core");
 const events = require("./events");
 const history = require("./history");
 const heatmap = require("./heatmap");
+const resonance = require("./resonance");
+const semanticSearch = require("./semantic-search");
+const memory = require("./memory");
 
 const app = express();
 const server = http.createServer(app);
@@ -19,11 +22,12 @@ app.use(express.static(path.join(__dirname, "../frontend")));
 let objects = [];
 let simulationInterval = null;
 let tickCount = 0;
+let lastResonance = { resonance: 0, level: "low" };
 
 // Загружаем историю при старте
 history.load();
 
-// REST API — история
+// REST API — история (Phase 3)
 app.get("/api/history", (req, res) => {
     const n = parseInt(req.query.n) || 60;
     res.json(history.getLast(n));
@@ -45,8 +49,28 @@ app.get("/api/metrics", (req, res) => {
     const stats = metrics.calc(objects);
     const aksi = aksiCore.calcAKSI(objects);
     const evts = events.generate(objects, aksi);
+    const res_ = resonance.calcResonance(aksi);
+    const dimax = metrics.calcDIMAX(stats, aksi, res_);
     const summary = history.getSummary();
-    res.json({ stats, aksi, events: evts, historySummary: summary });
+    res.json({ stats, aksi, events: evts, resonance: res_, dimax, historySummary: summary });
+});
+
+// REST API — семантический поиск по событиям
+app.get("/api/search-events", (req, res) => {
+    const query = req.query.query || "";
+    if (!query.trim()) {
+        return res.status(400).json({ error: "query parameter is required" });
+    }
+    const results = semanticSearch.searchEvents(query);
+    res.json({ query, results });
+});
+
+// REST API — Memory_AKSI
+app.get("/api/memory", (req, res) => {
+    res.json({
+        snapshots: memory.getSnapshots(),
+        summary: memory.getSummary()
+    });
 });
 
 // Запускаем симуляцию один раз (не на каждое подключение)
@@ -55,26 +79,45 @@ function startSimulation() {
     simulationInterval = setInterval(() => {
         tickCount++;
 
-        objects = ai.update(objects);
+        objects = ai.update(objects, lastResonance.resonance);
         const stats = metrics.calc(objects);
         const aksi = aksiCore.calcAKSI(objects);
         const evts = events.generate(objects, aksi);
 
+        // Индексируем события для семантического поиска
+        evts.forEach(evt => semanticSearch.indexEvent(evt));
+
+        // Рассчитываем Resonance Field
+        const res = resonance.calcResonance(aksi);
+        lastResonance = res;
+
+        // Рассчитываем DIMAX v3
+        const dimax = metrics.calcDIMAX(stats, aksi, res);
+
         // Обновляем тепловую карту
         heatmap.update(objects);
 
-        // Записываем снимок в историю
+        // Записываем снимок в историю (Phase 3)
         history.record(stats, aksi, evts);
+
+        // Записываем снимок в Memory_AKSI (каждые 10 тиков)
+        memory.tick(stats, aksi, res, evts);
 
         // Каждые 60 тиков отправляем тепловую карту клиентам
         const hotspots = (tickCount % 60 === 0) ? heatmap.getHotspots(0.1) : null;
+
+        // Каждые 10 тиков отправляем снапшоты памяти клиентам
+        const memoryUpdate = (tickCount % 10 === 0) ? memory.getLast(20) : null;
 
         io.emit("update", {
             objects,
             stats,
             aksi,
             events: evts,
+            resonance: res,
+            dimax,
             heatmap: hotspots,
+            memoryUpdate,
             tick: tickCount
         });
     }, 1000);
@@ -92,6 +135,9 @@ io.on("connection", (socket) => {
 
     // Отправляем историю при подключении (последние 60 снимков)
     socket.emit("history", history.getLast(60));
+
+    // Отправляем Memory_AKSI снапшоты при подключении
+    socket.emit("memory", memory.getSnapshots());
 
     startSimulation();
 

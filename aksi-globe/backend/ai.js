@@ -1,7 +1,17 @@
 // AI module — управление объектами с ролями
-const roles = ["scout", "trader", "cluster", "signal"];
+// Поддерживает Resonance Field: при высоком резонансе cluster-объекты двигаются быстрее,
+// при низком — все объекты замедляются.
 
-exports.update = function(objects) {
+const roles = ["scout", "trader", "cluster", "signal"];
+const { getResonanceDriftMultiplier } = require("./resonance");
+
+/**
+ * Обновить состояние объектов
+ * @param {Array} objects — текущие объекты
+ * @param {number} resonanceVal — текущий уровень резонанса (0..1)
+ * @returns {Array} обновлённые объекты
+ */
+exports.update = function(objects, resonanceVal = 0.5) {
     // Спавним до 30 объектов с ролями
     if (objects.length < 30) {
         objects.push({
@@ -15,12 +25,16 @@ exports.update = function(objects) {
     }
 
     return objects.map(o => {
-        // Дрейф зависит от роли
+        // Базовый дрейф по роли
         let drift = 0.2;
         if (o.role === "cluster") drift = 0.05;
         if (o.role === "scout")   drift = 0.4;
         if (o.role === "trader")  drift = 0.15;
         if (o.role === "signal")  drift = 0.25;
+
+        // Применяем Resonance Field multiplier
+        const multiplier = getResonanceDriftMultiplier(resonanceVal, o.role);
+        drift *= multiplier;
 
         let newLat = o.lat + (Math.random() - 0.5) * drift;
         let newLng = o.lng + (Math.random() - 0.5) * drift;
