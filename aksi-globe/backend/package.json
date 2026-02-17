@@ -1,0 +1,17 @@
+{
+  "name": "aksi-globe-backend",
+  "version": "1.0.0",
+  "description": "AKSI Globe backend — real-time 3D Earth visualization with AI-driven objects",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

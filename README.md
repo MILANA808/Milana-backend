@@ -12,6 +12,186 @@ This repository integrates functionality from multiple AKSI projects:
 - **AKSI Signing Infrastructure** (`.aksi/`, `.github/workflows/`): Cryptographic signing for releases
 - **Backend API Services**: FastAPI endpoints for AKSI/Milana services
 
+## 🚀 Quick Start
+
+### Backend API Server
+
+#### Installation
+```bash
+pip install -r requirements.txt
+```
+
+#### Run Server
+```bash
+python main.py
+```
+or
+```bash
+uvicorn main:app --reload
+```
+
+Server will be available at: http://localhost:8000
+
+#### Run with Docker
+```bash
+docker-compose up -d
+```
+
+### API Documentation
+
+After starting the server, interactive documentation is available at:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## 🔌 Backend API Endpoints
+
+FastAPI backend for AKSI/Milana services:
+
+### Health & Monitoring
+- `GET /` - Root endpoint with service information
+- `GET /health` - Service health check
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-01-18T03:44:17.026Z",
+  "service": "milana-backend"
+}
+```
+- `GET /version` - Version information
+```json
+{
+  "version": "0.1.0",
+  "api": "aksi-backend",
+  "author": "Alfiia Bashirova (AKSI Project)",
+  "contact": "716elektrik@mail.ru"
+}
+```
+- `POST /echo` - Echo test endpoint
+```json
+// Request
+{
+  "message": "Hello AKSI"
+}
+
+// Response
+{
+  "echo": "Hello AKSI",
+  "timestamp": "2025-01-18T03:44:17.026Z",
+  "length": 10
+}
+```
+
+### AKSI Services
+
+#### `GET /aksi/metrics`
+Get AKSI metrics
+```json
+{
+  "eqs": 0.68,
+  "empathy_boost": 0.25,
+  "grid_system": "3x3",
+  "status": "active",
+  "timestamp": "2025-01-18T03:44:17.026Z",
+  "uptime": "active"
+}
+```
+
+#### `GET /aksi/proof`
+Get AKSI conscious cycle proof
+
+#### `POST /aksi/proof/stable`
+Create stable proof record with signature
+```json
+// Request
+{
+  "signature": "AKSI-proof-signature",
+  "timestamp": "2025-01-18T03:44:17.026Z",
+  "metrics": {
+    "eqs": 0.68
+  }
+}
+```
+
+#### `GET /aksi/logs?limit=50&level=info`
+Get AKSI logs
+- `limit` (optional): number of records (default 50)
+- `level` (optional): filter by level (info, warning, error)
+
+#### `POST /aksi/logs/append`
+Append log entry
+```json
+// Request
+{
+  "level": "info",
+  "message": "AKSI system initialized",
+  "context": {
+    "module": "core"
+  }
+}
+```
+
+#### `GET /aksi/logs/export?format=json`
+Export all logs
+- `format` (optional): export format (json or txt)
+
+### AI Work Tracking (NEW)
+
+#### `POST /aksi/ai-work/session`
+Track AI work sessions when working on code
+```json
+// Start session
+{
+  "action": "start",
+  "metadata": {"task": "implement feature X"}
+}
+
+// Update session
+{
+  "action": "update",
+  "session_id": "session_id_here",
+  "files_modified": ["main.py", "test.py"],
+  "lines_changed": 150,
+  "language": "python",
+  "operation": "create",  // create, update, delete, refactor
+  "commit_hash": "abc123"
+}
+
+// End session
+{
+  "action": "end",
+  "session_id": "session_id_here"
+}
+```
+
+#### `GET /aksi/ai-work/sessions?limit=50&status=active`
+Get AI work sessions
+- `limit` (optional): number of records (default 50)
+- `status` (optional): filter by status (active, completed)
+
+### Cryptographic Key Management (NEW)
+
+#### `POST /aksi/crypto/record-key`
+Record cryptographic keys created during AI work
+```json
+{
+  "key_type": "ed25519",
+  "public_key": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----",
+  "purpose": "signing",  // signing, verification, encryption
+  "algorithm": "Ed25519",
+  "created_by": "AI-Agent-Name",
+  "metadata": {"environment": "production"}
+}
+```
+
+#### `GET /aksi/crypto/keys?limit=50&key_type=ed25519&purpose=signing`
+Get list of recorded cryptographic keys
+- `limit` (optional): number of records (default 50)
+- `key_type` (optional): filter by key type (ed25519, rsa, ecdsa)
+- `purpose` (optional): filter by purpose (signing, verification, encryption)
+
+#### `GET /aksi/crypto/keys/{key_id}`
+Get detailed information about specific cryptographic key
+
 ## 🌐 Milana Web Portal
 
 The frontend provides a comprehensive AI superintelligence hub with:
@@ -102,22 +282,15 @@ python scripts/verify_release.py --root . \
 
 ⚠️ **Note**: Private key (`~/.aksi/aksi_private_ed25519.pem`) must be stored securely and never committed.
 
-## 🚀 Backend API Endpoints
+## 🔗 Frontend Integration
 
-FastAPI backend for AKSI/Milana services:
+For integration with [milana_site](https://github.com/MILANA808/milana_site):
 
-### Health & Monitoring
-- `GET /health` - Service health check
-- `GET /version` - Version information
-- `POST /echo` - Echo test endpoint
+1. Start the backend server
+2. In the frontend, specify backend URL: `http://localhost:8000`
+3. Frontend automatically connects to the API
 
-### AKSI Services
-- `GET /aksi/metrics` - System metrics
-- `GET /aksi/proof` - AKSI proof retrieval
-- `POST /aksi/proof/stable` - Stable proof submission
-- `GET /aksi/logs` - Log retrieval
-- `POST /aksi/logs/append` - Log appending
-- `GET /aksi/logs/export` - Log export
+CORS is configured to work with all domains (should be restricted in production).
 
 ## 📁 Repository Structure
 
@@ -126,6 +299,10 @@ FastAPI backend for AKSI/Milana services:
 ├── frontend/              # Milana web portal (static site)
 ├── .aksi/                 # AKSI signing infrastructure
 ├── .github/workflows/     # CI/CD automation
+├── main.py                # FastAPI backend application
+├── requirements.txt       # Python dependencies
+├── Dockerfile            # Docker image
+├── docker-compose.yml    # Docker Compose configuration
 ├── LICENSE                # Proprietary license
 ├── README.md             # This file
 ├── NOTICE                # Copyright notice
@@ -143,6 +320,11 @@ The Milana portal features a distinctive **purple superintelligence theme**:
 - Accessibility-first approach with ARIA labels
 
 ## 🧠 Technology Stack
+
+### Backend
+- **FastAPI** - Modern, fast web framework for building APIs
+- **Pydantic** - Data validation
+- **Uvicorn** - ASGI server
 
 ### Frontend
 - **Vanilla JavaScript** (ES6 modules)
