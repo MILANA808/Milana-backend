@@ -32,7 +32,7 @@ body {
     border: 1px solid rgba(0, 255, 128, 0.4);
     border-radius: 8px;
     padding: 16px 20px;
-    min-width: 200px;
+    min-width: 220px;
     backdrop-filter: blur(6px);
     box-shadow: 0 0 20px rgba(0, 255, 128, 0.15);
 }
@@ -56,6 +56,11 @@ body {
     font-size: 13px;
 }
 
+.metric.small {
+    font-size: 11px;
+    margin: 3px 0;
+}
+
 .label {
     color: rgba(0, 255, 128, 0.6);
 }
@@ -63,6 +68,46 @@ body {
 .value {
     color: #00ff80;
     font-weight: bold;
+}
+
+.aksi-value {
+    color: #ffffff;
+    font-size: 15px;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}
+
+.divider {
+    border-top: 1px solid rgba(0, 255, 128, 0.2);
+    margin: 8px 0;
+}
+
+/* Цвета ролей */
+.label.scout   { color: #00ff88; }
+.label.trader  { color: #00ccff; }
+.label.cluster { color: #ffaa00; }
+.label.signal  { color: #ff44ff; }
+
+/* События */
+.events-title {
+    font-size: 11px;
+    color: rgba(0, 255, 128, 0.5);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.event {
+    font-size: 11px;
+    color: #ffdd44;
+    margin: 2px 0;
+    padding: 2px 4px;
+    border-left: 2px solid #ffdd44;
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(4px); }
+    to   { opacity: 1; transform: translateX(0); }
 }
 
 .status {

@@ -10,5 +10,10 @@ socket.on("init", data => {
 
 socket.on("update", data => {
     updateObjects(data.objects);
-    updateUI(data.stats);
+    updateUI(data.stats, data.aksi, data.events);
+});
+
+// Перерисовываем глобус при изменении размера окна
+window.addEventListener("resize", () => {
+    drawGlobe();
 });
