@@ -1,3 +1,5 @@
+// globe.js — 3D визуализация Земли с объектами, цветами ролей и тепловой картой
+
 // Цвета по роли объекта
 const roleColors = {
     scout:   { fill: "#00ff88", glow: "rgba(0, 255, 136, 0.9)" },
@@ -6,6 +8,26 @@ const roleColors = {
     signal:  { fill: "#ff44ff", glow: "rgba(255, 68, 255, 0.9)" },
     default: { fill: "#00ff80", glow: "rgba(0, 255, 128, 0.9)" }
 };
+
+// Тепловые точки накопленные от сервера
+let hotspots = [];
+
+// Конвертация lat/lng → canvas xy для глобуса
+function latLngToXY(lat, lng, cx, cy, rx, ry) {
+    const normLng = (lng + 180) / 360;
+    const normLat = (90 - lat) / 180;
+
+    const angle = normLng * Math.PI * 2 - Math.PI;
+    const latFrac = normLat * 2 - 1;
+
+    const cosA = Math.cos(angle);
+    if (cosA < 0) return null; // задняя полусфера
+
+    const x = cx + Math.cos(angle) * rx * Math.cos(latFrac * Math.PI / 2);
+    const y = cy + latFrac * ry;
+
+    return { x, y };
+}
 
 export function drawGlobe() {
     const canvas = document.getElementById("globe");
@@ -44,6 +66,28 @@ export function drawGlobe() {
     ctx.fillStyle = gradient;
     ctx.fill();
 
+    // Тепловая карта (рисуем поверх Земли, до сетки)
+    if (hotspots.length > 0) {
+        const maxVal = Math.max(...hotspots.map(h => h.value), 1);
+        hotspots.forEach(h => {
+            const pos = latLngToXY(h.lat, h.lng, cx, cy, rx, ry);
+            if (!pos) return;
+
+            const intensity = h.value / maxVal;
+            const radius = 15 + intensity * 30;
+            const alpha = 0.05 + intensity * 0.25;
+
+            const heatGlow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, radius);
+            heatGlow.addColorStop(0, `rgba(255, 100, 0, ${alpha})`);
+            heatGlow.addColorStop(1, "rgba(255, 100, 0, 0)");
+
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = heatGlow;
+            ctx.fill();
+        });
+    }
+
     // Сетка координат
     ctx.strokeStyle = "rgba(0, 200, 255, 0.12)";
     ctx.lineWidth = 0.5;
@@ -76,7 +120,7 @@ export function updateObjects(objects) {
     const canvas = document.getElementById("globe");
     const ctx = canvas.getContext("2d");
 
-    // Перерисовываем глобус
+    // Перерисовываем глобус (включая тепловую карту)
     drawGlobe();
 
     if (!objects || objects.length === 0) return;
@@ -84,18 +128,10 @@ export function updateObjects(objects) {
     const { cx, cy, rx, ry } = window._globeGeometry || { cx: canvas.width / 2, cy: canvas.height / 2, rx: 200, ry: 180 };
 
     objects.forEach(o => {
-        const normLng = (o.lng + 180) / 360;
-        const normLat = (90 - o.lat) / 180;
+        const pos = latLngToXY(o.lat, o.lng, cx, cy, rx, ry);
+        if (!pos) return;
 
-        const angle = normLng * Math.PI * 2 - Math.PI;
-        const latFrac = normLat * 2 - 1;
-
-        // Показываем только переднюю полусферу
-        const cosA = Math.cos(angle);
-        if (cosA < 0) return;
-
-        const x = cx + Math.cos(angle) * rx * Math.cos(latFrac * Math.PI / 2);
-        const y = cy + latFrac * ry;
+        const { x, y } = pos;
 
         // Цвет по роли
         const color = roleColors[o.role] || roleColors.default;
@@ -119,4 +155,11 @@ export function updateObjects(objects) {
         ctx.fill();
         ctx.shadowBlur = 0;
     });
+}
+
+// Обновить кешированные тепловые точки
+export function updateHeatmap(data) {
+    if (data && Array.isArray(data)) {
+        hotspots = data;
+    }
 }

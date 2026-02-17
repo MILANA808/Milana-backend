@@ -122,3 +122,34 @@ body {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
 }
+
+/* История AKSI */
+#history-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(0, 200, 255, 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 0 15px rgba(0, 200, 255, 0.1);
+    min-width: 220px;
+}
+
+.history-title {
+    font-size: 10px;
+    color: rgba(0, 200, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+#history-chart {
+    display: block;
+    width: 200px;
+    height: 60px;
+    border-radius: 4px;
+    background: rgba(0, 20, 40, 0.8);
+}
