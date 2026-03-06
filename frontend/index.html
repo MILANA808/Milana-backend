@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" id="root">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -14,10 +14,10 @@
 <body>
     <header>
         <div class="header-info">
-            <h1>Milana Superintelligence Hub</h1>
-            <span>Фиолетовый интерфейс для диалогов сильнее OpenAI и DeepSeek</span>
+            <h1 data-i18n="header.title">Milana Superintelligence Hub</h1>
+            <span data-i18n="header.subtitle">Фиолетовый интерфейс для диалогов сильнее OpenAI и DeepSeek</span>
         </div>
-        <div class="tag">Hyper AI Edition</div>
+        <div class="tag" data-i18n="header.tag">Hyper AI Edition</div>
     </header>
     <main id="layout" role="main">
         <nav id="sidebar" aria-label="Приложения">
@@ -29,10 +29,10 @@
                         <span>Superintelligence</span>
                     </div>
                 </div>
-                <button type="button" id="newChatButton">＋ Новый диалог</button>
+                <button type="button" id="newChatButton" data-i18n="sidebar.newChat">＋ Новый диалог</button>
             </div>
             <div class="sidebar-section">
-                <p class="sidebar-label">Приложения</p>
+                <p class="sidebar-label" data-i18n="sidebar.apps">Приложения</p>
                 <ul>
                     <li><button type="button" data-target="moodmirror">moodmirror</button></li>
                     <li><button type="button" data-target="mindmirror">mindmirror</button></li>
@@ -57,7 +57,7 @@
                     <li><button type="button" data-target="storyai">storyai</button></li>
                 </ul>
             </div>
-            <div class="sidebar-footer">
+            <div class="sidebar-footer" data-i18n="sidebar.footer">
                 Milana Hyper AI удерживает ваш ключ только в браузере и открывает сверхбыстрые ответы. Переключайтесь между модулями без перезапуска.
             </div>
         </nav>
@@ -65,48 +65,48 @@
             <div class="content-inner">
                 <div class="hero-card">
                     <div>
-                        <h2>Milana Hyperintelligence</h2>
-                        <p>Испытайте фиолетовый интерфейс, вдохновлённый ChatGPT, но усиленный движком AKSI. Бесплатный режим Super GPTb соединяет память, интернет-оркестратор и мгновенные статусы — без ожидания ключа.</p>
+                        <h2 data-i18n="hero.title">Milana Hyperintelligence</h2>
+                        <p data-i18n="hero.description">Испытайте фиолетовый интерфейс, вдохновлённый ChatGPT, но усиленный движком AKSI. Бесплатный режим Super GPTb соединяет память, интернет-оркестратор и мгновенные статусы — без ожидания ключа.</p>
                         <div class="hero-actions">
-                            <button type="button" id="launchAksichat">Открыть суперчат</button>
-                            <span class="tag">Realtime Insight</span>
-                            <span class="tag">Orchestrated Prompts</span>
-                            <span class="tag free-tier">Free Tier Ready</span>
+                            <button type="button" id="launchAksichat" data-i18n="hero.launch">Открыть суперчат</button>
+                            <span class="tag" data-i18n="hero.tag.realtime">Realtime Insight</span>
+                            <span class="tag" data-i18n="hero.tag.orchestrated">Orchestrated Prompts</span>
+                            <span class="tag free-tier" data-i18n="hero.tag.free">Free Tier Ready</span>
                         </div>
                     </div>
                 </div>
 
                 <div id="gptIntegration" class="card">
-                <h2>Интеграция с GPT</h2>
-                <p>Milana Super GPTb уже готова отвечать в бесплатном режиме. Введите ключ OpenAI API, чтобы подключить облачные модели и увеличить мощность.</p>
+                <h2 data-i18n="gpt.title">Интеграция с GPT</h2>
+                <p data-i18n="gpt.description">Milana Super GPTb уже готова отвечать в бесплатном режиме. Введите ключ OpenAI API, чтобы подключить облачные модели и увеличить мощность.</p>
                 <div class="free-tier-callout">
-                    <strong>Бесплатный режим:</strong> суперчат работает на памяти и интернет-данных даже без ключа. Ключ нужен только для прямого доступа к API OpenAI.
+                    <strong data-i18n="gpt.freeTier.title">Бесплатный режим:</strong> <span data-i18n="gpt.freeTier.description">суперчат работает на памяти и интернет-данных даже без ключа. Ключ нужен только для прямого доступа к API OpenAI.</span>
                 </div>
                 <div class="inline-input-group">
                     <input type="password" id="gptApiKey" placeholder="sk-..." autocomplete="off">
-                    <button type="button" id="gptSaveKey">Сохранить ключ</button>
-                    <button type="button" id="gptTestKey" class="secondary">Проверить</button>
-                    <button type="button" id="gptClearKey" class="secondary">Удалить</button>
+                    <button type="button" id="gptSaveKey" data-i18n="gpt.saveKey">Сохранить ключ</button>
+                    <button type="button" id="gptTestKey" class="secondary" data-i18n="gpt.testKey">Проверить</button>
+                    <button type="button" id="gptClearKey" class="secondary" data-i18n="gpt.clearKey">Удалить</button>
                 </div>
                 <p id="gptKeyStatus" class="note"></p>
-                <p class="note">Ключ хранится локально в вашем браузере. Для повышенной безопасности рекомендуется использовать прокси-сервер.</p>
+                <p class="note" data-i18n="gpt.note">Ключ хранится локально в вашем браузере. Для повышенной безопасности рекомендуется использовать прокси-сервер.</p>
             </div>
 
             <div id="gptCognition" class="card cognition-card">
-                <h2>Память и интернет-оркестратор GPTb</h2>
+                <h2 data-i18n="cognition.title">Память и интернет-оркестратор GPTb</h2>
                 <p id="knowledgeStatus" class="note"></p>
                 <div class="cognition-grid">
                     <section aria-labelledby="memoryStatus">
-                        <h3>Долгосрочная память</h3>
+                        <h3 data-i18n="memory.title">Долгосрочная память</h3>
                         <p id="memoryStatus" class="note"></p>
-                        <button type="button" id="memoryClearButton" class="secondary">Очистить память</button>
+                        <button type="button" id="memoryClearButton" class="secondary" data-i18n="memory.clear">Очистить память</button>
                     </section>
                     <section>
-                        <h3>Источники внешних данных</h3>
+                        <h3 data-i18n="knowledge.title">Источники внешних данных</h3>
                         <ul id="knowledgeSourcesList" class="knowledge-sources"></ul>
                         <div class="knowledge-actions">
-                            <button type="button" id="knowledgeRefreshButton">Обновить данные</button>
-                            <span class="note small-note">Данные хранятся только локально и обновляются по запросу.</span>
+                            <button type="button" id="knowledgeRefreshButton" data-i18n="knowledge.refresh">Обновить данные</button>
+                            <span class="note small-note" data-i18n="knowledge.note">Данные хранятся только локально и обновляются по запросу.</span>
                         </div>
                         <pre id="knowledgePreview" class="knowledge-preview" aria-live="polite"></pre>
                     </section>
@@ -252,10 +252,11 @@
             </div>
 
             <div id="aksichat" class="app-section">
-                <p>Подключите GPT, чтобы получать живые ответы от виртуального ассистента.</p>
+                <p data-i18n="app.aksichat">Подключите GPT, чтобы получать живые ответы от виртуального ассистента.</p>
                 <div id="chatBox" class="card"></div>
-                <input id="chatInput" placeholder="Введите сообщение">
-                <button type="button" id="chatSendButton">Отправить</button>
+                <div id="filePreviewContainer" class="file-preview-container"></div>
+                <input id="chatInput" data-i18n-placeholder="chat.placeholder" placeholder="Введите сообщение">
+                <button type="button" id="chatSendButton" data-i18n="chat.send">Отправить</button>
                 <p id="chatStatus" class="note"></p>
             </div>
 

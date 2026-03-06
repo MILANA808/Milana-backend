@@ -563,3 +563,185 @@ li {
     margin-top: 1rem;
     transition: background-color 0.3s ease;
 }
+
+/* Language Switcher */
+.lang-switcher {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 1000;
+    min-width: 48px;
+    height: 36px;
+    padding: 0 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, rgba(167, 109, 255, 0.85), rgba(102, 64, 255, 0.85));
+    border: 1px solid rgba(167, 109, 255, 0.6);
+    border-radius: 18px;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    box-shadow: 0 8px 24px rgba(104, 66, 255, 0.4);
+}
+
+.lang-switcher:hover,
+.lang-switcher:focus {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(104, 66, 255, 0.55);
+    background: linear-gradient(135deg, rgba(180, 130, 255, 0.95), rgba(120, 80, 255, 0.95));
+    outline: none;
+}
+
+/* Upload Buttons */
+.upload-buttons {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.upload-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 12px;
+    background: rgba(167, 109, 255, 0.18);
+    border: 1px solid rgba(167, 109, 255, 0.32);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.upload-btn:hover,
+.upload-btn:focus {
+    background: rgba(167, 109, 255, 0.32);
+    border-color: rgba(167, 109, 255, 0.55);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.upload-icon {
+    font-size: 1.2rem;
+}
+
+/* Chat Input Area with Upload */
+.chat-input-area {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+    margin-top: 0.75rem;
+}
+
+.chat-input-area input {
+    flex: 1;
+    margin-top: 0;
+}
+
+/* File Preview */
+.file-preview-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.file-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.65rem 0.85rem;
+    background: rgba(167, 109, 255, 0.12);
+    border: 1px solid rgba(167, 109, 255, 0.28);
+    border-radius: 14px;
+    max-width: 280px;
+}
+
+.file-preview-image {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.file-preview-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    background: rgba(167, 109, 255, 0.15);
+    border-radius: 8px;
+}
+
+.file-preview-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    overflow: hidden;
+    flex: 1;
+}
+
+.file-preview-name {
+    font-size: 0.85rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-preview-size {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.file-preview-remove {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    padding: 0;
+    background: rgba(255, 143, 183, 0.2);
+    border: 1px solid rgba(255, 143, 183, 0.4);
+    border-radius: 50%;
+    color: var(--danger);
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.file-preview-remove:hover,
+.file-preview-remove:focus {
+    background: rgba(255, 143, 183, 0.35);
+    transform: scale(1.1);
+    outline: none;
+}
+
+/* Image preview in chat */
+.chat-bubble img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 12px;
+    margin-top: 0.5rem;
+}
+
+.chat-bubble .image-analysis {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(167, 109, 255, 0.2);
+}
+
+/* Responsive adjustments for language switcher */
+@media (max-width: 1080px) {
+    .lang-switcher {
+        top: 0.85rem;
+        right: 0.85rem;
+    }
+}

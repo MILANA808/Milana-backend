@@ -2,8 +2,26 @@ import { createGptIntegration } from './gpt.js';
 import { createKnowledgeHub } from './knowledge.js';
 import { createMemoryVault } from './memory.js';
 import { createFreeTierEngine } from './free-tier.js';
+import { i18n, t, applyTranslations, createLanguageSwitcher } from './i18n.js';
+import { FileUploadManager, createUploadButtons, createFilePreview } from './file-upload.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize language switcher
+    const langSwitcher = createLanguageSwitcher();
+    document.body.appendChild(langSwitcher);
+
+    // Set initial HTML lang attribute
+    document.documentElement.lang = i18n.getLanguage();
+
+    // Apply initial translations
+    applyTranslations();
+
+    // Subscribe to language changes for DOM updates
+    i18n.subscribe((lang) => {
+        document.documentElement.lang = lang;
+        applyTranslations();
+    });
+
     const sections = document.querySelectorAll('.app-section');
     const navButtons = document.querySelectorAll('#sidebar button[data-target]');
     const newChatButton = document.getElementById('newChatButton');
@@ -88,9 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!memoryStatus) return;
         const summary = memoryVault.recall({ limit: 6, maxLength: 900 });
         memoryStatus.textContent = summary
-            ? `Долгосрочная память Milana GPTb:\n${summary}`
-            : 'Память пуста. Начните диалог, и Milana сохранит ключевые инсайты.';
+            ? `${t('memory.title')} Milana GPTb:\n${summary}`
+            : t('memory.empty');
     };
+
+    // Subscribe to language changes to update memory status
+    i18n.subscribe(() => updateMemoryStatus());
 
     const renderKnowledgeSources = () => {
         if (!knowledgeSourcesList) return;
@@ -541,24 +562,91 @@ document.addEventListener('DOMContentLoaded', () => {
         const input = document.getElementById('chatInput');
         const box = document.getElementById('chatBox');
         const chatStatus = document.getElementById('chatStatus');
-        const introMessage = 'Привет! Я Милана Hyper AI. Помогаю мыслить стратегически, создавать код и воплощать идеи лучше любых стандартных моделей.';
+        const getIntroMessage = () => t('chat.intro');
+        const getSystemPrompt = () => t('chat.system');
         const chatHistory = [
-            { role: 'system', content: 'Ты — Милана, сверхинтеллект AKSI. Отвечай по-русски, вдохновляюще и по делу. Предлагай стратегии, идеи и конкретные шаги, оставаясь доброжелательной и уверенной.' }
+            { role: 'system', content: getSystemPrompt() }
         ];
         chatInputElement = input;
 
-        const appendMessage = (role, text) => {
+        // File preview container
+        let filePreviewContainer = document.getElementById('filePreviewContainer');
+        if (!filePreviewContainer) {
+            filePreviewContainer = document.createElement('div');
+            filePreviewContainer.id = 'filePreviewContainer';
+            filePreviewContainer.className = 'file-preview-container';
+            // Insert before input area
+            const aksichatSection = document.getElementById('aksichat');
+            if (aksichatSection && input) {
+                input.parentNode.insertBefore(filePreviewContainer, input);
+            }
+        }
+
+        // Initialize file upload manager
+        const uploadManager = new FileUploadManager({
+            onUpload: (fileData) => {
+                const preview = createFilePreview(fileData, () => {
+                    const idx = uploadManager.getPendingFiles().indexOf(fileData);
+                    if (idx > -1) {
+                        uploadManager.removePendingFile(idx);
+                    }
+                    preview.remove();
+                });
+                filePreviewContainer.appendChild(preview);
+            },
+            onError: (error) => {
+                setChatStatus(error, true);
+            }
+        });
+
+        // Create upload buttons and insert them
+        const inputParent = input?.parentNode;
+        if (inputParent) {
+            // Create input area wrapper
+            const inputArea = document.createElement('div');
+            inputArea.className = 'chat-input-area';
+
+            // Add upload buttons
+            const uploadButtons = createUploadButtons(uploadManager);
+            inputArea.appendChild(uploadButtons.wrapper);
+
+            // Move input to wrapper
+            inputArea.appendChild(input);
+
+            // Move send button to wrapper
+            inputArea.appendChild(chatSendButton);
+
+            // Replace original structure
+            inputParent.appendChild(inputArea);
+        }
+
+        const appendMessage = (role, text, imageUrl = null) => {
             if (!box) return;
             const block = document.createElement('div');
             block.className = `chat-message ${role === 'user' ? 'from-user' : 'from-assistant'}`;
 
             const avatar = document.createElement('div');
             avatar.className = 'chat-avatar';
-            avatar.textContent = role === 'user' ? 'Вы' : 'AI';
+            avatar.textContent = role === 'user' ? t('chat.user') : 'AI';
 
             const bubble = document.createElement('div');
             bubble.className = 'chat-bubble';
-            bubble.textContent = text;
+
+            // Handle image + text
+            if (imageUrl) {
+                const img = document.createElement('img');
+                img.src = imageUrl;
+                img.alt = 'Uploaded image';
+                bubble.appendChild(img);
+                if (text) {
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'image-analysis';
+                    textDiv.textContent = text;
+                    bubble.appendChild(textDiv);
+                }
+            } else {
+                bubble.textContent = text;
+            }
 
             block.appendChild(avatar);
             block.appendChild(bubble);
@@ -573,14 +661,20 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         resetChat = ({ greet = false } = {}) => {
-            chatHistory.splice(1);
+            chatHistory.splice(0); // Clear all
+            chatHistory.push({ role: 'system', content: getSystemPrompt() });
             if (box) {
                 box.innerHTML = '';
             }
+            // Clear pending files
+            uploadManager.clearPendingFiles();
+            filePreviewContainer.innerHTML = '';
+
             if (greet) {
-                appendMessage('assistant', introMessage);
-                chatHistory.push({ role: 'assistant', content: introMessage });
-                setChatStatus('Я на связи для нового диалога.');
+                const intro = getIntroMessage();
+                appendMessage('assistant', intro);
+                chatHistory.push({ role: 'assistant', content: intro });
+                setChatStatus(t('chat.newDialog'));
             } else {
                 setChatStatus('');
             }
@@ -588,50 +682,97 @@ document.addEventListener('DOMContentLoaded', () => {
             updateMemoryStatus();
         };
 
+        // Update system prompt on language change
+        i18n.subscribe(() => {
+            // Update system prompt in chat history
+            if (chatHistory[0]?.role === 'system') {
+                chatHistory[0].content = getSystemPrompt();
+            }
+        });
+
         resetChat({ greet: true });
 
         const sendMessage = async () => {
             const text = input?.value.trim();
-            if (!text) return;
-            appendMessage('user', text);
+            const pendingFiles = uploadManager.getPendingFiles();
+
+            if (!text && pendingFiles.length === 0) return;
+
+            // Get first pending image if any
+            const imageFile = pendingFiles.find(f => f.type === 'image');
+
+            // Show user message with image if present
+            if (imageFile) {
+                appendMessage('user', text || t('chat.uploadSuccess'), imageFile.previewUrl);
+            } else if (text) {
+                appendMessage('user', text);
+            }
+
             if (input) input.value = '';
             chatSendButton.disabled = true;
-            setChatStatus('Синхронизирую память и интернет-данные...');
+
+            // Clear pending files and preview
+            uploadManager.clearPendingFiles();
+            filePreviewContainer.innerHTML = '';
+
+            setChatStatus(t('chat.syncStatus'));
 
             try {
-                const { combinedText } = await refreshKnowledgePreview(text);
+                const { combinedText } = await refreshKnowledgePreview(text || 'image analysis');
                 const runtimeMessages = [...chatHistory];
                 const memoryContext = memoryVault.recall({ limit: 6, maxLength: 900 });
                 if (memoryContext) {
                     runtimeMessages.push({
                         role: 'system',
-                        content: `Долгосрочная память Milana GPTb:\n${memoryContext}`
+                        content: `${t('memory.title')} Milana GPTb:\n${memoryContext}`
                     });
                 }
                 if (combinedText) {
                     runtimeMessages.push({
                         role: 'system',
-                        content: `Свежие внешние данные:\n${combinedText}`
+                        content: `External data:\n${combinedText}`
                     });
                 }
 
-                const userMessage = { role: 'user', content: text };
-                runtimeMessages.push(userMessage);
-                chatHistory.push(userMessage);
+                let userContent;
+                if (imageFile) {
+                    // For image, create multimodal message
+                    const imagePrompt = text || 'Describe this image in detail.';
+                    userContent = [
+                        { type: 'text', text: imagePrompt },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: `data:${imageFile.mimeType};base64,${imageFile.base64}`,
+                                detail: 'auto'
+                            }
+                        }
+                    ];
+                    setChatStatus(t('chat.analyzing'));
+                } else {
+                    userContent = text;
+                }
 
-                setChatStatus('Запрашиваем ответ у Milana Hyper AI...');
-                const reply = await queryGPT(runtimeMessages, { useFreeTier: true });
+                const userMessage = { role: 'user', content: userContent };
+                runtimeMessages.push(userMessage);
+                chatHistory.push({ role: 'user', content: text || '[Image uploaded]' });
+
+                setChatStatus(t('chat.requestStatus'));
+                const reply = await queryGPT(runtimeMessages, {
+                    useFreeTier: !imageFile, // Use GPT-4o for images
+                    model: imageFile ? 'gpt-4o' : undefined
+                });
                 chatHistory.push({ role: 'assistant', content: reply });
                 appendMessage('assistant', reply);
-                memoryVault.remember({ user: text, assistant: reply });
+                memoryVault.remember({ user: text || '[Image]', assistant: reply });
                 updateMemoryStatus();
-                setChatStatus('Готово.');
+                setChatStatus(t('chat.ready'));
             } catch (error) {
                 const message = formatGptError(error);
                 setChatStatus(message, true);
                 const fallback = error?.code === 'NO_KEY'
-                    ? 'Добавьте ключ OpenAI API в блоке выше, чтобы я смог отвечать.'
-                    : 'Не удалось получить ответ от GPT. Попробуйте ещё раз.';
+                    ? t('chat.noKey')
+                    : t('chat.error');
                 appendMessage('assistant', fallback);
                 chatHistory.push({ role: 'assistant', content: fallback });
             } finally {
