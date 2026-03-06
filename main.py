@@ -4,6 +4,16 @@ Milana-backend (AKSI) - FastAPI backend для AKSI / Milana services
 Copyright (c) 2025 Alfiia Bashirova (AKSI Project)
 Contact: 716elektrik@mail.ru
 All rights reserved.
+
+AKSI Superintelligence System v0.2.0
+=====================================
+Features:
+- Agentic Workflow with Tools
+- Web Search (Tavily/Serper)
+- Vision Analysis (GPT-4o)
+- Quantum Simulation (quimb/Qiskit MPS up to 1000 qubits)
+- Vector Memory (ChromaDB)
+- JWT Authentication
 """
 
 from fastapi import FastAPI, HTTPException, Request
@@ -18,10 +28,18 @@ import hashlib
 import secrets
 from collections import defaultdict
 
+# Import AKSI v2 API router
+try:
+    from aksi.api import router as aksi_v2_router
+    AKSI_V2_AVAILABLE = True
+except ImportError:
+    AKSI_V2_AVAILABLE = False
+    aksi_v2_router = None
+
 app = FastAPI(
     title="Milana-backend (AKSI)",
-    description="FastAPI backend for AKSI / Milana services",
-    version="0.1.0"
+    description="FastAPI backend for AKSI Superintelligence System",
+    version="0.2.0"
 )
 
 # Настройка CORS для интеграции с фронтендом
@@ -32,6 +50,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include AKSI v2 router if available
+if AKSI_V2_AVAILABLE and aksi_v2_router:
+    app.include_router(aksi_v2_router)
 
 # Хранилище для логов (в продакшене следует использовать БД)
 logs_storage: List[dict] = []
@@ -113,11 +135,11 @@ class CryptoKeyRecordRequest(BaseModel):
 @app.get("/")
 async def root():
     """Корневой эндпоинт"""
-    return {
+    response = {
         "service": "Milana-backend (AKSI)",
         "version": "0.2.0",
         "status": "running",
-        "description": "FastAPI backend with AI work tracking and cryptographic key management",
+        "description": "AKSI Superintelligence System with agentic workflow",
         "endpoints": {
             "health_monitoring": [
                 "/health",
@@ -147,6 +169,48 @@ async def root():
             "redoc": "/redoc"
         }
     }
+
+    # Add AKSI v2 endpoints if available
+    if AKSI_V2_AVAILABLE:
+        response["aksi_v2"] = {
+            "status": "active",
+            "description": "Superintelligence Agent System",
+            "capabilities": [
+                "Web Search (Tavily/Serper)",
+                "Vision Analysis (GPT-4o)",
+                "Quantum Simulation (up to 1000 qubits)",
+                "Vector Memory (ChromaDB)",
+                "JWT Authentication"
+            ],
+            "endpoints": {
+                "auth": [
+                    "/aksi/v2/auth/register (POST)",
+                    "/aksi/v2/auth/login (POST)",
+                    "/aksi/v2/auth/me (GET)"
+                ],
+                "agent": [
+                    "/aksi/v2/agent/session (POST)",
+                    "/aksi/v2/agent/session/{session_id} (GET/DELETE)",
+                    "/aksi/v2/agent/message (POST)"
+                ],
+                "tools": [
+                    "/aksi/v2/tools/search (POST)",
+                    "/aksi/v2/tools/vision (POST)",
+                    "/aksi/v2/tools/vision/upload (POST)",
+                    "/aksi/v2/tools/quantum (POST)",
+                    "/aksi/v2/tools/quantum/bell (POST)",
+                    "/aksi/v2/tools/quantum/ghz (POST)"
+                ],
+                "memory": [
+                    "/aksi/v2/memory/store (POST)",
+                    "/aksi/v2/memory/search (POST)",
+                    "/aksi/v2/memory/{memory_id} (GET/DELETE)"
+                ],
+                "status": "/aksi/v2/status (GET)"
+            }
+        }
+
+    return response
 
 
 @app.get("/health")
