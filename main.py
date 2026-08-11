@@ -1,10 +1,10 @@
 """
-Milana-backend (AKSI) v0.4.0
-Phase1 identity/auth + chat stream + admin
-Copyright (c) Alfiia Bashirova — 716elektrik@mail.ru
+Milana-backend (AKSI) v0.5.0
+Identity · Chat · Admin · World search · Codex
+Copyright (c) Alfiia Bashirova
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
@@ -12,7 +12,15 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 import hashlib
 import secrets
+import re
 from collections import defaultdict
+
+try:
+    import httpx
+
+    HTTPX = True
+except ImportError:
+    HTTPX = False
 
 try:
     from aksi.api import router as aksi_v2_router
@@ -48,10 +56,30 @@ except ImportError:
     ADMIN_AVAILABLE = False
     admin_router = None
 
+VERSION = "0.5.0"
+
+CODEX = {
+    "version": "1.0",
+    "title": "Кодекс Суверенного ИИ АКСИ",
+    "rules": [
+        "Не выдумывать факты; указывать источники",
+        "Признавать неуверенность",
+        "Показывать ход рассуждения где уместно",
+        "Отказ при вреде людям / эксплуатации",
+        "Identity (DID) — ответственность, не маркетинг",
+    ],
+    "url": "https://milana808.github.io/CODEX.md",
+}
+
+BLOCK_PATTERNS = [
+    (re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)", re.I), "вред"),
+    (re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)", re.I), "harm"),
+]
+
 app = FastAPI(
     title="Milana-backend (AKSI)",
-    description="Identity · Auth · Chat · Admin · Agent tools",
-    version="0.4.0",
+    description="Sovereign AI API · search · codex · identity",
+    version=VERSION,
 )
 
 app.add_middleware(
@@ -97,7 +125,7 @@ ai_code_metrics = {
 }
 
 aksi_metrics = {
-    "eqs": 0.68,
+    "eqs": 0.72,
     "empathy_boost": 0.25,
     "grid_system": "3x3",
     "status": "active",
@@ -141,26 +169,101 @@ class CryptoKeyRecordRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class WorldSearchRequest(BaseModel):
+    q: str
+    include_arxiv: Optional[bool] = None
+
+
+class CodexCheckRequest(BaseModel):
+    text: str
+
+
+def codex_check(text: str) -> dict:
+    for pat, why in BLOCK_PATTERNS:
+        if pat.search(text or ""):
+            return {"ok": False, "reason": why, "codex": CODEX["version"]}
+    return {"ok": True, "codex": CODEX["version"]}
+
+
+async def wiki_search(q: str) -> Optional[dict]:
+    if not HTTPX:
+        return None
+    clean = re.sub(r"^(что такое|who is|what is|расскажи про)\s+", "", q, flags=re.I).strip()
+    if not clean:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(
+                "https://ru.wikipedia.org/w/api.php",
+                params={
+                    "action": "opensearch",
+                    "search": clean,
+                    "limit": 1,
+                    "namespace": 0,
+                    "format": "json",
+                },
+            )
+            data = r.json()
+            title = data[1][0] if data and len(data) > 1 and data[1] else None
+            if not title:
+                return None
+            s = await client.get(
+                f"https://ru.wikipedia.org/api/rest_v1/page/summary/{title}"
+            )
+            js = s.json()
+            extract = js.get("extract") or ""
+            url = (js.get("content_urls") or {}).get("desktop", {}).get("page", "")
+            return {
+                "text": f"{js.get('title', title)}. {extract[:700]}",
+                "source": "Wikipedia",
+                "url": url,
+            }
+    except Exception:
+        return None
+
+
+async def arxiv_search(q: str) -> Optional[dict]:
+    if not HTTPX:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(
+                "https://export.arxiv.org/api/query",
+                params={"search_query": f"all:{q[:80]}", "start": 0, "max_results": 1},
+            )
+            xml = r.text
+            titles = re.findall(r"<title>([^<]+)</title>", xml)
+            paper = titles[1] if len(titles) > 1 else None
+            ids = re.findall(r"<id>(https://arxiv.org/abs/[^<]+)</id>", xml)
+            if not paper:
+                return None
+            return {"text": f"arXiv: {paper}", "source": "arXiv", "url": ids[0] if ids else ""}
+    except Exception:
+        return None
+
+
 @app.get("/")
 async def root():
     return {
         "service": "Milana-backend (AKSI)",
-        "version": "0.4.0",
+        "version": VERSION,
         "status": "running",
         "modules": {
             "phase1_identity_auth": PHASE1_AVAILABLE,
             "chat_stream": CHAT_AVAILABLE,
             "admin": ADMIN_AVAILABLE,
             "aksi_v2": AKSI_V2_AVAILABLE,
+            "world_search": True,
+            "codex": True,
         },
         "try": [
-            "GET /api/identity",
-            "POST /api/register",
+            "GET /health",
+            "GET /api/codex",
+            "POST /api/world/search",
             "POST /api/aksi/chat",
-            "GET /api/admin/stats (X-Admin-Token)",
             "/docs",
         ],
-        "documentation": {"swagger_ui": "/docs"},
+        "frontend": "https://milana808.github.io/aksi/",
     }
 
 
@@ -170,20 +273,65 @@ async def health():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "service": "milana-backend",
-        "version": "0.4.0",
+        "version": VERSION,
         "chat": CHAT_AVAILABLE,
         "admin": ADMIN_AVAILABLE,
+        "httpx": HTTPX,
     }
 
 
 @app.get("/version")
 async def version():
     return {
-        "version": "0.4.0",
+        "version": VERSION,
         "api": "aksi-backend",
         "author": "Alfiia Bashirova (AKSI Project)",
-        "contact": "716elektrik@mail.ru",
     }
+
+
+@app.get("/api/codex")
+async def get_codex():
+    return CODEX
+
+
+@app.post("/api/codex/check")
+async def check_codex(body: CodexCheckRequest):
+    return codex_check(body.text)
+
+
+@app.post("/api/world/search")
+async def world_search(body: WorldSearchRequest):
+    gate = codex_check(body.q)
+    if not gate["ok"]:
+        return {"ok": False, "refusal": gate, "results": []}
+
+    results = []
+    w = await wiki_search(body.q)
+    if w:
+        results.append(w)
+    need_science = body.include_arxiv or bool(
+        re.search(r"квант|физик|neural|algorithm|theorem|arxiv|науч", body.q, re.I)
+    )
+    if need_science:
+        a = await arxiv_search(body.q)
+        if a:
+            results.append(a)
+
+    text = "\n\n".join(r["text"] for r in results) if results else None
+    sources = [f"{r['source']}" + (f" {r['url']}" if r.get("url") else "") for r in results]
+    return {
+        "ok": True,
+        "q": body.q,
+        "text": text,
+        "sources": sources,
+        "results": results,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/api/world/search")
+async def world_search_get(q: str = Query(..., min_length=1)):
+    return await world_search(WorldSearchRequest(q=q))
 
 
 @app.post("/echo")
@@ -212,13 +360,9 @@ async def get_metrics():
 @app.get("/aksi/proof")
 async def get_proof():
     return {
-        "proof": {
-            "eqs": aksi_metrics["eqs"],
-            "model": "Ψ(AKSI)",
-            "verified": True,
-        },
+        "proof": {"eqs": aksi_metrics["eqs"], "model": "Ψ(AKSI)", "verified": True},
         "timestamp": datetime.utcnow().isoformat(),
-        "signature": "AKSI-proof-v0.4",
+        "signature": f"AKSI-proof-v{VERSION}",
     }
 
 
@@ -271,7 +415,11 @@ async def record_ai_work_session(request: AIWorkSessionRequest):
     if request.action == "start":
         sid = request.session_id or secrets.token_hex(16)
         ai_work_sessions.append(
-            {"session_id": sid, "status": "active", "started_at": datetime.utcnow().isoformat()}
+            {
+                "session_id": sid,
+                "status": "active",
+                "started_at": datetime.utcnow().isoformat(),
+            }
         )
         ai_code_metrics["total_sessions"] += 1
         return {"status": "session_started", "session_id": sid}
