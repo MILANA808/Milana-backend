@@ -1,28 +1,20 @@
-# Core FastAPI dependencies
+# Core FastAPI
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 pydantic>=2.5.3
 pydantic-settings>=2.1.0
 python-multipart>=0.0.22
 
-# HTTP client for API integrations
+# HTTP + crypto
+httpx>=0.27.0
 aiohttp>=3.9.1
+python-jose[cryptography]>=3.3.0
+cryptography>=42.0.0
 
-# Numerical computing (required for quantum simulation)
+# Numerical (quantum tools)
 numpy>=1.26.0
 
-# JWT Authentication
-python-jose[cryptography]>=3.3.0
-
-# Vector memory (optional - for ChromaDB support)
+# Optional later:
 # chromadb>=0.4.22
-
-# Quantum simulation (optional - install one or both)
-# quimb>=1.7.0  # For tensor network simulation (MPS)
-# qiskit>=1.0.0  # For standard quantum simulation
-# qiskit-aer>=0.13.3  # Qiskit simulator backend
-
-# Note: For production use, uncomment the libraries above as needed:
-# - ChromaDB: for vector memory/semantic search capabilities
-# - quimb: for large-scale (1000+ qubit) simulations with MPS
-# - qiskit: for smaller circuits with more features and algorithms
+# quimb>=1.7.0
+# qiskit>=1.0.0
