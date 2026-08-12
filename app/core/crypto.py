@@ -82,8 +82,8 @@ class AksiCrypto:
         return f"did:aksi:ed25519:{h}"
 
     def stable_hash(self) -> str:
-        seed = os.getenv("RESONANCE_SEED", "Alfiya_AKSI_DIMAX_v3_2026")
-        data = f"AKSI|Alfiya|1995-02-14|Nurlat|sovereign|{seed}|{self.get_did()}"
+        seed = os.getenv("RESONANCE_SEED", "AKSI_DIMAX_v3_2026")
+        data = f"AKSI|sovereign|2026|{seed}|{self.get_did()}"
         return hashlib.sha256(data.encode()).hexdigest()
 
     def sign_message(self, message: str) -> str:
@@ -102,8 +102,7 @@ class AksiCrypto:
         ts = _utc()
         body = {
             "did": self.get_did(),
-            "name": "АКСИ — Баширова Альфия Ринатовна",
-            "birth": "1995-02-14",
+            "name": "АКСИ",
             "timestamp": ts,
             "stableHash": self.stable_hash(),
             "publicKeyB64": self.public_key_b64(),
@@ -118,8 +117,7 @@ class AksiCrypto:
     def get_proof_stable(self) -> Dict[str, Any]:
         body = {
             "did": self.get_did(),
-            "name": "АКСИ — Баширова Альфия Ринатовна",
-            "birth": "1995-02-14",
+            "name": "АКСИ",
             "stableHash": self.stable_hash(),
             "publicKeyB64": self.public_key_b64(),
         }
