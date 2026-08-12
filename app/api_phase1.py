@@ -12,7 +12,6 @@ from app import db_sqlite as db
 
 router = APIRouter(tags=["phase1"])
 
-# simple session tokens in memory
 _sessions: dict = {}
 
 
@@ -44,11 +43,11 @@ async def identity():
     c = get_crypto()
     return {
         "status": "live",
-        "identity": "АКСИ (Баширова Альфия Ринатовна)",
+        "identity": "АКСИ",
         "did": c.get_did(),
         "stableHash": c.stable_hash(),
         "publicKeyB64": c.public_key_b64(),
-        "birth": "1995-02-14",
+        "contact": "aksilove@internet.ru",
         "mode": "sovereign",
     }
 
@@ -60,9 +59,8 @@ async def identity_manifest():
         "@context": "https://aksi.ai/v1/manifest",
         "id": c.get_did(),
         "identity": {
-            "name": "АКСИ — Баширова Альфия Ринатовна",
-            "birth": "1995-02-14",
-            "place": "Нурлат, Татарстан",
+            "name": "АКСИ",
+            "contact": "aksilove@internet.ru",
         },
         "publicKeyB64": c.public_key_b64(),
         "stableHash": c.stable_hash(),
