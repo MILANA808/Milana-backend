@@ -1,7 +1,6 @@
 """AKSI multi-agent swarm — specialized agents with clear tasks.
 
-Agents run offline-first; optional LLM via app.core.llm when keys in env.
-No secrets in this module.
+Agents run offline-first. No secrets in this module.
 """
 from __future__ import annotations
 
@@ -16,6 +15,8 @@ try:
     import httpx
 except ImportError:
     httpx = None  # type: ignore
+
+WIKI_HEADERS = {"User-Agent": "AKSI-Agent/0.7 (research; contact aksilove@internet.ru)"}
 
 
 @dataclass
@@ -47,8 +48,6 @@ class BaseAgent:
 
 
 class ResearchAgent(BaseAgent):
-    """Task: find facts from Wikipedia."""
-
     name = "research"
     role = "факты и источники"
 
@@ -62,7 +61,7 @@ class ResearchAgent(BaseAgent):
         if httpx is None:
             return AgentResult(self.name, task, "httpx недоступен", False)
         try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
+            async with httpx.AsyncClient(timeout=12.0, headers=WIKI_HEADERS) as client:
                 r = await client.get(
                     "https://ru.wikipedia.org/w/api.php",
                     params={
@@ -73,7 +72,16 @@ class ResearchAgent(BaseAgent):
                         "format": "json",
                     },
                 )
-                data = r.json()
+                if r.status_code != 200:
+                    return AgentResult(
+                        self.name, task, f"Research: Wikipedia HTTP {r.status_code}", False
+                    )
+                try:
+                    data = r.json()
+                except Exception:
+                    return AgentResult(
+                        self.name, task, "Research: некорректный ответ Wikipedia", False
+                    )
                 title = data[1][0] if data and len(data) > 1 and data[1] else None
                 if not title:
                     return AgentResult(
@@ -82,7 +90,7 @@ class ResearchAgent(BaseAgent):
                 s = await client.get(
                     f"https://ru.wikipedia.org/api/rest_v1/page/summary/{title}"
                 )
-                js = s.json()
+                js = s.json() if s.status_code == 200 else {}
                 extract = (js.get("extract") or "")[:700]
                 url = (js.get("content_urls") or {}).get("desktop", {}).get("page", "")
                 ans = f"{js.get('title', title)}. {extract}"
@@ -96,8 +104,6 @@ class ResearchAgent(BaseAgent):
 
 
 class AnalystAgent(BaseAgent):
-    """Task: structure reasoning steps."""
-
     name = "analyst"
     role = "разбор и план"
 
@@ -116,8 +122,6 @@ class AnalystAgent(BaseAgent):
 
 
 class CoderAgent(BaseAgent):
-    """Task: short code / architecture hints."""
-
     name = "coder"
     role = "код и архитектура"
 
@@ -127,7 +131,7 @@ class CoderAgent(BaseAgent):
             ans = (
                 "Coder: FastAPI — роуты в app/api, ядро в app/core, секреты только в .env.\n"
                 "Запуск: uvicorn main:app --port 8000\n"
-                "Чат: POST /api/chat  ·  агенты: POST /api/agents/run"
+                "Чат: POST /api/chat  ·  агенты: POST /api/agents/run · swarm: POST /api/agents/swarm"
             )
         elif any(k in low for k in ("html", "фронт", "сайт", "css")):
             ans = (
@@ -136,20 +140,18 @@ class CoderAgent(BaseAgent):
             )
         elif any(k in low for k in ("python", "код", "функц", "скрипт")):
             ans = (
-                "Coder: пишите чистые функции, без секретов в коде.\n"
+                "Coder: чистые функции, без секретов в коде.\n"
                 "Пример:\n```python\ndef reply(text: str) -> str:\n    return text.strip() or 'пусто'\n```"
             )
         else:
             ans = (
                 "Coder: уточните стек (Python/JS/API). "
-                "Общий совет — модули, тесты, .env для ключей, без hardcode."
+                "Общий совет — модули, тесты, .env для ключей."
             )
         return AgentResult(self.name, task, ans, True)
 
 
 class GuardianAgent(BaseAgent):
-    """Task: safety / codex gate."""
-
     name = "guardian"
     role = "кодекс и безопасность"
 
@@ -178,8 +180,6 @@ class GuardianAgent(BaseAgent):
 
 
 class ResonatorAgent(BaseAgent):
-    """Task: identity + signature."""
-
     name = "resonator"
     role = "identity и подпись"
 
@@ -219,7 +219,6 @@ async def run_agent(name: str, task: str, context: Optional[str] = None) -> Dict
 
 
 async def run_swarm(task: str, context: Optional[str] = None) -> Dict[str, Any]:
-    """Guardian → Resonator → Analyst → Research → Coder (parallel-ish sequential)."""
     order = ["guardian", "resonator", "analyst", "research", "coder"]
     results: List[Dict[str, Any]] = []
     blocked = False
@@ -229,8 +228,8 @@ async def run_swarm(task: str, context: Optional[str] = None) -> Dict[str, Any]:
         if name == "guardian" and r.get("ok") is False:
             blocked = True
             break
-    summary_parts = [f"[{x['agent']}] {x['answer'][:200]}" for x in results]
-    final = {
+    summary_parts = [f"[{x['agent']}] {x['answer'][:220]}" for x in results]
+    return {
         "ok": not blocked,
         "task": task,
         "agents_run": [x["agent"] for x in results],
@@ -238,4 +237,3 @@ async def run_swarm(task: str, context: Optional[str] = None) -> Dict[str, Any]:
         "summary": "\n\n".join(summary_parts),
         "signature": sign_short(task + str(len(results)))[:24],
     }
-    return final
