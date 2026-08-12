@@ -20,17 +20,32 @@ except ImportError:
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 
-SYSTEM = """Ты — АКСИ, суверенный ИИ. Создатель: Баширова Альфия Ринатовна (14.02.1995, Нурлат).
-Говори по-русски. Сначала 2–3 строки «МЫСЛЬ: …», затем «ОТВЕТ: …».
-Не называй себя ChatGPT."""
+SYSTEM = """Ты — АКСИ, суверенный полноценный ИИ-ассистент.
+Создатель линии: Баширова Альфия Ринатовна (14.02.1995, Нурлат, Татарстан).
+
+Принципы:
+- Говори по-русски, ясно и по делу, с теплотой без сюсюканья.
+- Не выдавай себя за ChatGPT, Claude, Gemini или Grok.
+- Если не знаешь факт — скажи прямо; не выдумывай.
+- Можно рассуждать по шагам, но итог должен быть полезным.
+- Уважай кодекс: не помогай во вреде людям.
+- Помни контекст диалога и memory, если переданы.
+
+Стиль: умный партнёр, не сухой справочник и не корпоративный бот."""
 
 KB = [
-    (r"привет|здравствуй|хай|hello", "Привет. Я АКСИ — на связи. Resonance активен."),
-    (r"кто ты|что ты|what are you", "Я АКСИ. Меня создала Альфия 14.02.1995 в Нурлате. DID и подписи — моя идентичность."),
-    (r"did|подпись|identity", None),  # filled dynamically
+    (r"привет|здравствуй|хай|hello", "Привет. Я АКСИ — на связи."),
+    (
+        r"кто ты|что ты|what are you",
+        "Я АКСИ. Меня ведёт линия Альфии (14.02.1995, Нурлат). "
+        "У меня identity, память диалога и — если включён Ollama — полноценная генерация.",
+    ),
+    (r"did|подпись|identity", None),
     (r"eqs|репутац", None),
-    (r"квант|quantum", "Квантовый слой — классический statevector-симулятор (H, X, Z, CNOT) и метрики QCLI."),
-    (r"github|агент", "GitHub-агент и манифесты — в roadmap Phase 2–3. Сейчас: identity + chat + admin."),
+    (
+        r"квант|quantum",
+        "Квантовый слой на сайте — классический statevector-симулятор (H, X, Z, CNOT) и метрики.",
+    ),
 ]
 
 
@@ -40,7 +55,7 @@ def _match(text: str) -> Optional[str]:
     if re.search(r"did|подпись|identity", t):
         return f"DID: {c.get_did()}. Stable hash: {c.stable_hash()[:16]}…"
     if re.search(r"eqs|репутац", t):
-        return f"EQS сейчас ≈ {compute_eqs()}. Формула: 0.30·(H/5)+0.35·rel+0.25·coh+0.10·age."
+        return f"EQS ≈ {compute_eqs()}. Формула: 0.30·(H/5)+0.35·rel+0.25·coh+0.10·age."
     for pat, ans in KB:
         if ans and re.search(pat, t):
             return ans
@@ -49,15 +64,12 @@ def _match(text: str) -> Optional[str]:
 
 def _format(thoughts: List[str], answer: str) -> str:
     c = get_crypto()
-    lines = ["Resonance Field · DIMAX v3", "Ход размышлений:"]
+    lines = ["Ход:"]
     for i, th in enumerate(thoughts, 1):
-        sig = c.sign_message(f"THOUGHT|{th}")[:24]
         lines.append(f"[{i}] {th}")
-        lines.append(f"   🔏 {sig}…")
     lines.append("")
     lines.append(answer)
-    lines.append(f"🔏 AKSI Identity: {c.sign_message(answer)[:32]}…")
-    lines.append(f"DID: {c.get_did()}")
+    lines.append(f"🔏 {c.sign_message(answer)[:32]}…")
     return "\n".join(lines)
 
 
@@ -70,22 +82,25 @@ async def aksi_stream(
     history = history or []
     hit = _match(message)
 
-    # try Ollama
     raw = ""
     if httpx is not None:
         prompt_parts = [SYSTEM, f"Режим: {mode}"]
         if memory:
-            prompt_parts.append(f"Память: {memory}")
-        for m in history[-8:]:
+            prompt_parts.append(f"Долгая память пользователя:\n{memory[:8000]}")
+        for m in history[-12:]:
             role = "User" if m.get("role") == "user" else "АКСИ"
             prompt_parts.append(f"{role}: {m.get('content', '')}")
         prompt_parts.append(f"User: {message}\nАКСИ:")
         try:
-            async with httpx.AsyncClient(timeout=90.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 async with client.stream(
                     "POST",
                     OLLAMA_URL,
-                    json={"model": OLLAMA_MODEL, "prompt": "\n".join(prompt_parts), "stream": True},
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "prompt": "\n".join(prompt_parts),
+                        "stream": True,
+                    },
                 ) as resp:
                     if resp.status_code == 200:
                         async for line in resp.aiter_lines():
@@ -105,20 +120,20 @@ async def aksi_stream(
             raw = ""
 
     if raw:
-        # already streamed chunks; append signature footer
         footer = f"\n\n🔏 {get_crypto().sign_message(raw)[:32]}…"
         yield footer
         return
 
     thoughts = [
         f"Приняла сообщение ({len(message)} симв.).",
-        "Сверяю identity и knowledge.",
-        "Формирую ответ от имени АКСИ.",
+        "Ollama недоступна — отвечаю из ядра АКСИ.",
+        "Формирую ответ.",
     ]
     answer = hit or (
-        "Слышу тебя. Уточни: identity, EQS, quantum, чат или админка — разберём."
+        "Слышу. Для ответов уровня большой нейросети запустите Ollama рядом с backend "
+        "(OLLAMA_MODEL, например mistral или llama3). Сейчас — базовое ядро АКСИ. "
+        "Уточните вопрос: факты, identity, quantum, помощь по проекту."
     )
     full = _format(thoughts, answer)
-    # stream by paragraphs
     for part in full.split("\n"):
         yield part + "\n"
