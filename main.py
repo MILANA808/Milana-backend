@@ -1,12 +1,12 @@
 """
-Milana-backend (AKSI) v0.6.0
-Identity · Chat · Admin · World search · Codex · LLM · Memory · Resonance
-Copyright (c) Alfiia Bashirova
+Milana-backend (AKSI) v0.7.0
+Identity · Chat · Agents · Admin · World search · Codex · LLM · Memory · Resonance
+Copyright (c) AKSI Project
 """
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from datetime import datetime
@@ -66,7 +66,15 @@ except ImportError:
     IDENTITY_AVAILABLE = False
     identity_router = None
 
-VERSION = "0.6.0"
+try:
+    from app.api.agents import router as agents_router
+
+    AGENTS_AVAILABLE = True
+except ImportError:
+    AGENTS_AVAILABLE = False
+    agents_router = None
+
+VERSION = "0.7.0"
 
 CODEX = {
     "version": "1.0",
@@ -88,7 +96,7 @@ BLOCK_PATTERNS = [
 
 app = FastAPI(
     title="Milana-backend (AKSI)",
-    description="Sovereign AI API · search · codex · identity · llm",
+    description="Sovereign AI API · agents · search · codex · identity · llm",
     version=VERSION,
 )
 
@@ -110,6 +118,8 @@ if ADMIN_AVAILABLE and admin_router:
     app.include_router(admin_router)
 if IDENTITY_AVAILABLE and identity_router:
     app.include_router(identity_router)
+if AGENTS_AVAILABLE and agents_router:
+    app.include_router(agents_router)
 
 ADMIN_DIR = Path(__file__).parent / "admin"
 if ADMIN_DIR.is_dir():
@@ -274,6 +284,7 @@ async def root():
             "chat_stream": CHAT_AVAILABLE,
             "admin": ADMIN_AVAILABLE,
             "identity": IDENTITY_AVAILABLE,
+            "agents_swarm": AGENTS_AVAILABLE,
             "aksi_v2": AKSI_V2_AVAILABLE,
             "world_search": True,
             "codex": True,
@@ -282,11 +293,10 @@ async def root():
         "try": [
             "GET /health",
             "GET /api/identity",
-            "GET /api/codex",
-            "POST /api/world/search",
+            "GET /api/agents",
+            "POST /api/agents/swarm",
             "POST /api/chat",
-            "POST /api/aksi/chat",
-            "/admin-ui/",
+            "POST /api/world/search",
             "/docs",
         ],
         "frontend": "https://milana808.github.io/aksi/",
@@ -301,6 +311,7 @@ async def health():
         "service": "milana-backend",
         "version": VERSION,
         "chat": CHAT_AVAILABLE,
+        "agents": AGENTS_AVAILABLE,
         "admin": ADMIN_AVAILABLE,
         "identity": IDENTITY_AVAILABLE,
         "httpx": HTTPX,
@@ -312,7 +323,8 @@ async def version():
     return {
         "version": VERSION,
         "api": "aksi-backend",
-        "author": "Alfiia Bashirova (AKSI Project)",
+        "author": "AKSI Project",
+        "contact": "aksilove@internet.ru",
     }
 
 
