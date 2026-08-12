@@ -16,7 +16,7 @@ except ImportError:
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 
-SYSTEM = """Ты — АКСИ, суверенный ИИ. Создатель: Альфия (14.02.1995).
+SYSTEM = """Ты — АКСИ, суверенный ИИ. Проект АКСИ.
 Отвечай по-русски, по существу. Не выдумывай факты. Не называй себя ChatGPT."""
 
 
@@ -32,7 +32,6 @@ async def generate(
 
     memory.append(session_id, "user", message)
 
-    # offline hit
     hit = knowledge.lookup(message)
     if hit:
         sig = sign_short(hit)
@@ -86,7 +85,6 @@ async def generate(
         yield f"\n\n🔏 {sign_short(raw)}"
         return
 
-    # final offline
     idb = identity_block()
     fallback = (
         f"Слышу: «{message[:120]}». Ollama сейчас недоступна — отвечаю из ядра АКСИ. "

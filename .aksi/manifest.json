@@ -7,8 +7,8 @@
     "public_key_pem": "<WILL_BE_FILLED>"
   },
   "maintainer": {
-    "name": "Alfiya (AKSI)",
-    "contact": "n/a"
+    "name": "AKSI",
+    "contact": "aksilove@internet.ru"
   },
   "versioning": {
     "scheme": "semver",

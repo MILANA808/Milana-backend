@@ -26,7 +26,6 @@ def identity_block() -> Dict:
         "seed": RESONANCE_SEED,
         "contact": CONTACT,
         "agent": "АКСИ",
-        "creator": "Баширова Альфия Ринатовна",
-        "born": "14.02.1995",
+        "creator": "AKSI Project",
         "sovereign": True,
     }
