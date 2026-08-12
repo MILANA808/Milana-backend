@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>АКСИ Admin</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0a0612;color:#f4f0ff;padding:24px}
+.w{max-width:640px;margin:0 auto}
+input,button{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:#160e28;color:#fff}
+button{cursor:pointer;background:#7c3aed;border:none;margin-left:8px}
+pre{background:#120a22;padding:14px;border-radius:12px;overflow:auto;font-size:12px;line-height:1.4}
+h1{font-size:1.3rem}
+.row{margin:12px 0}
+</style>
+</head>
+<body>
+<div class="w">
+  <h1>АКСИ Admin</h1>
+  <div class="row">
+    <input id="api" style="width:70%" value="http://127.0.0.1:8000"/>
+    <button id="save">Save</button>
+  </div>
+  <div class="row">
+    <button data-path="/health">/health</button>
+    <button data-path="/api/identity">/api/identity</button>
+    <button data-path="/">/</button>
+  </div>
+  <div class="row">
+    <input id="msg" style="width:70%" placeholder="Тест чата…"/>
+    <button id="chat">Chat</button>
+  </div>
+  <pre id="out">—</pre>
+</div>
+<script>
+var api=localStorage.getItem('AKSI_API')||'http://127.0.0.1:8000';
+document.getElementById('api').value=api;
+document.getElementById('save').onclick=function(){
+  api=document.getElementById('api').value.replace(/\/$/,'');
+  localStorage.setItem('AKSI_API',api);
+};
+function show(x){document.getElementById('out').textContent=typeof x==='string'?x:JSON.stringify(x,null,2);}
+document.querySelectorAll('[data-path]').forEach(function(b){
+  b.onclick=async function(){
+    try{
+      var r=await fetch(api+b.getAttribute('data-path'));
+      show(await r.json());
+    }catch(e){show(String(e));}
+  };
+});
+document.getElementById('chat').onclick=async function(){
+  var m=document.getElementById('msg').value.trim();if(!m)return;
+  try{
+    var r=await fetch(api+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:m,mode:'aksi'})});
+    show(await r.json());
+  }catch(e){show(String(e));}
+};
+</script>
+</body>
+</html>
