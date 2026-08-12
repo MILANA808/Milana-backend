@@ -1,12 +1,13 @@
 """
-Milana-backend (AKSI) v0.5.0
-Identity · Chat · Admin · World search · Codex
+Milana-backend (AKSI) v0.6.0
+Identity · Chat · Admin · World search · Codex · LLM · Memory · Resonance
 Copyright (c) Alfiia Bashirova
 """
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -14,6 +15,7 @@ import hashlib
 import secrets
 import re
 from collections import defaultdict
+from pathlib import Path
 
 try:
     import httpx
@@ -56,7 +58,15 @@ except ImportError:
     ADMIN_AVAILABLE = False
     admin_router = None
 
-VERSION = "0.5.0"
+try:
+    from app.api.identity import router as identity_router
+
+    IDENTITY_AVAILABLE = True
+except ImportError:
+    IDENTITY_AVAILABLE = False
+    identity_router = None
+
+VERSION = "0.6.0"
 
 CODEX = {
     "version": "1.0",
@@ -78,7 +88,7 @@ BLOCK_PATTERNS = [
 
 app = FastAPI(
     title="Milana-backend (AKSI)",
-    description="Sovereign AI API · search · codex · identity",
+    description="Sovereign AI API · search · codex · identity · llm",
     version=VERSION,
 )
 
@@ -98,6 +108,12 @@ if CHAT_AVAILABLE and chat_router:
     app.include_router(chat_router)
 if ADMIN_AVAILABLE and admin_router:
     app.include_router(admin_router)
+if IDENTITY_AVAILABLE and identity_router:
+    app.include_router(identity_router)
+
+ADMIN_DIR = Path(__file__).parent / "admin"
+if ADMIN_DIR.is_dir():
+    app.mount("/admin-ui", StaticFiles(directory=str(ADMIN_DIR), html=True), name="admin-ui")
 
 
 @app.on_event("startup")
@@ -248,19 +264,29 @@ async def root():
         "service": "Milana-backend (AKSI)",
         "version": VERSION,
         "status": "running",
+        "identity": {
+            "did": "did:aksi:ed25519:sovereign-2026",
+            "seed": "AKSI_DIMAX_v3_2026",
+            "contact": "aksilove@internet.ru",
+        },
         "modules": {
             "phase1_identity_auth": PHASE1_AVAILABLE,
             "chat_stream": CHAT_AVAILABLE,
             "admin": ADMIN_AVAILABLE,
+            "identity": IDENTITY_AVAILABLE,
             "aksi_v2": AKSI_V2_AVAILABLE,
             "world_search": True,
             "codex": True,
+            "llm_memory_resonance": True,
         },
         "try": [
             "GET /health",
+            "GET /api/identity",
             "GET /api/codex",
             "POST /api/world/search",
+            "POST /api/chat",
             "POST /api/aksi/chat",
+            "/admin-ui/",
             "/docs",
         ],
         "frontend": "https://milana808.github.io/aksi/",
@@ -276,6 +302,7 @@ async def health():
         "version": VERSION,
         "chat": CHAT_AVAILABLE,
         "admin": ADMIN_AVAILABLE,
+        "identity": IDENTITY_AVAILABLE,
         "httpx": HTTPX,
     }
 
