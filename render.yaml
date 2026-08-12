@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: aksi-backend
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: RESONANCE_SEED
+        value: AKSI_DIMAX_v3_2026
+      - key: AKSI_DID
+        value: did:aksi:ed25519:sovereign-2026
+      - key: AKSI_ADMIN_TOKEN
+        generateValue: true
+      - key: XAI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: XAI_MODEL
+        value: grok-3
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
