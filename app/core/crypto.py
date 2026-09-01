@@ -1,7 +1,7 @@
 """
-AKSI Ed25519 identity — Phase 1
+AKSI Ed25519 identity — unified seal for API responses
 DID: did:aksi:ed25519:<sha256(pubkey)[:32]>
-Keys live in process memory (and optional file path via AKSI_KEY_DIR).
+Keys: AKSI_KEY_DIR or .aksi_keys/
 """
 from __future__ import annotations
 
@@ -12,15 +12,19 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
     Ed25519PublicKey,
 )
-from cryptography.hazmat.primitives import serialization
 
 
 def _utc() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _canonical(obj: Any) -> str:
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 class AksiCrypto:
@@ -42,25 +46,30 @@ class AksiCrypto:
         priv_path, pub_path = self._paths()
         if os.path.isfile(priv_path):
             with open(priv_path, "rb") as f:
-                self._private = serialization.load_pem_private_key(f.read(), password=None)
-            self._public = self._private.public_key()
+                key = serialization.load_pem_private_key(f.read(), password=None)
+            if not isinstance(key, Ed25519PrivateKey):
+                raise TypeError("AKSI key must be Ed25519")
+            self._private = key
+            self._public = key.public_key()
             return
         self._private = Ed25519PrivateKey.generate()
         self._public = self._private.public_key()
         if self.key_dir or os.getenv("AKSI_PERSIST_KEYS") == "1":
-            pem_priv = self._private.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption(),
-            )
-            pem_pub = self._public.public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            )
             with open(priv_path, "wb") as f:
-                f.write(pem_priv)
+                f.write(
+                    self._private.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption(),
+                    )
+                )
             with open(pub_path, "wb") as f:
-                f.write(pem_pub)
+                f.write(
+                    self._public.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                    )
+                )
 
     def public_key_raw(self) -> bytes:
         return self._public.public_bytes(
@@ -92,11 +101,32 @@ class AksiCrypto:
 
     def verify_message(self, message: str, signature_b64: str) -> bool:
         try:
-            sig = base64.b64decode(signature_b64)
-            self._public.verify(sig, message.encode("utf-8"))
+            self._public.verify(base64.b64decode(signature_b64), message.encode("utf-8"))
             return True
         except Exception:
             return False
+
+    def seal_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        body = {k: v for k, v in payload.items() if k != "seal"}
+        canonical = _canonical(body)
+        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        sig = self.sign_message(canonical)
+        return {
+            "did": self.get_did(),
+            "alg": "Ed25519",
+            "hash_sha256": digest,
+            "signature": sig,
+            "ts": _utc(),
+            "kid": f"{self.get_did()}#key-1",
+            "label": "AKSI",
+        }
+
+    def verify_seal(self, payload: Dict[str, Any], seal: Dict[str, Any]) -> bool:
+        body = {k: v for k, v in payload.items() if k != "seal"}
+        canonical = _canonical(body)
+        if hashlib.sha256(canonical.encode("utf-8")).hexdigest() != seal.get("hash_sha256"):
+            return False
+        return self.verify_message(canonical, str(seal.get("signature", "")))
 
     def get_proof(self) -> Dict[str, Any]:
         ts = _utc()
@@ -107,12 +137,8 @@ class AksiCrypto:
             "stableHash": self.stable_hash(),
             "publicKeyB64": self.public_key_b64(),
         }
-        payload = json.dumps(body, ensure_ascii=False, sort_keys=True)
-        return {
-            **body,
-            "signature": self.sign_message(payload),
-            "alg": "Ed25519",
-        }
+        payload = _canonical(body)
+        return {**body, "signature": self.sign_message(payload), "alg": "Ed25519"}
 
     def get_proof_stable(self) -> Dict[str, Any]:
         body = {
@@ -121,7 +147,7 @@ class AksiCrypto:
             "stableHash": self.stable_hash(),
             "publicKeyB64": self.public_key_b64(),
         }
-        payload = json.dumps(body, ensure_ascii=False, sort_keys=True)
+        payload = _canonical(body)
         return {
             **body,
             "signature": self.sign_message(payload),
