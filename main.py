@@ -1,6 +1,6 @@
 """
-Milana-backend (AKSI) v0.7.0
-Identity · Chat · Agents · Admin · World search · Codex · LLM · Memory · Resonance
+Milana-backend (AKSI) v0.8.0
+Identity · Chat · Agents · Admin · World search · Codex · LLM · Memory · Resonance · Seal
 Copyright (c) AKSI Project
 """
 
@@ -74,7 +74,7 @@ except ImportError:
     AGENTS_AVAILABLE = False
     agents_router = None
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 CODEX = {
     "version": "1.0",
@@ -96,7 +96,7 @@ BLOCK_PATTERNS = [
 
 app = FastAPI(
     title="Milana-backend (AKSI)",
-    description="Sovereign AI API · agents · search · codex · identity · llm",
+    description="Sovereign AI API · agents · search · codex · identity · llm · seal",
     version=VERSION,
 )
 
@@ -107,6 +107,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- AKSI Seal: after AI/API JSON is built, before client receives it ---
+try:
+    from app.middleware.aksi_seal import AksiSealMiddleware
+
+    app.add_middleware(AksiSealMiddleware)
+    SEAL_MIDDLEWARE = True
+except ImportError:
+    SEAL_MIDDLEWARE = False
 
 if AKSI_V2_AVAILABLE and aksi_v2_router:
     app.include_router(aksi_v2_router)
@@ -289,12 +298,12 @@ async def root():
             "world_search": True,
             "codex": True,
             "llm_memory_resonance": True,
+            "seal_middleware": SEAL_MIDDLEWARE,
         },
         "try": [
             "GET /health",
-            "GET /api/identity",
-            "GET /api/agents",
-            "POST /api/agents/swarm",
+            "GET /aksi/seal/public",
+            "POST /echo",
             "POST /api/chat",
             "POST /api/world/search",
             "/docs",
@@ -306,6 +315,7 @@ async def root():
 @app.get("/health")
 async def health():
     return {
+        "seal_middleware": SEAL_MIDDLEWARE,
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "service": "milana-backend",
@@ -403,6 +413,44 @@ async def get_proof():
         "timestamp": datetime.utcnow().isoformat(),
         "signature": f"AKSI-proof-v{VERSION}",
     }
+
+
+@app.get("/aksi/seal/public")
+async def seal_public():
+    """Public key + DID for client-side verification of response seals."""
+    try:
+        from app.core.crypto import get_crypto
+
+        c = get_crypto()
+        return {
+            "did": c.get_did(),
+            "alg": "Ed25519",
+            "publicKeyB64": c.public_key_b64(),
+            "publicKeyPem": c.public_key_pem(),
+            "kid": f"{c.get_did()}#key-1",
+            "verify": "Use seal.hash_sha256 + seal.signature over canonical JSON body without the seal field",
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/aksi/seal/verify")
+async def seal_verify(body: dict):
+    """Server-side check: { payload: {...}, seal: {...} }."""
+    try:
+        from app.core.crypto import get_crypto
+
+        c = get_crypto()
+        payload = body.get("payload") or body.get("data") or body
+        seal = body.get("seal") or (payload.get("seal") if isinstance(payload, dict) else None)
+        if not isinstance(payload, dict) or not isinstance(seal, dict):
+            raise HTTPException(400, "payload and seal required")
+        ok = c.verify_seal(payload, seal)
+        return {"ok": ok, "did": c.get_did()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 @app.post("/aksi/proof/stable")
