@@ -1,5 +1,13 @@
-AKSI DevOps AI Connector
-UID: AKSI-CONNECTOR-b247cfde-0e7b-4461-8fc5-5e30d138a06e
+AKSI — NOTICE
+=============
+Copyright (c) 2024–2026 AKSI Project
+Contact: aksilove@internet.ru
 
-This distribution includes cryptographic materials. Keep `.aksi/aksi_private_ed25519.pem` SECRET (do not commit).
-Public verification key must be placed at `.aksi/aksi_public_ed25519.pem` (PEM).
+This repository and the AKSI product are proprietary.
+See LICENSE for full terms.
+
+Visible source ≠ open source.
+Commercial use requires a written agreement.
+
+Keep private keys under .aksi/ secret — do not commit private PEMs.
+Public evaluation: https://milana808.github.io

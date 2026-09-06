@@ -1,8 +1,144 @@
-Copyright (c) AKSI Project
-
+AKSI PROPRIETARY SOFTWARE LICENSE
+=================================
+Copyright (c) 2024–2026 AKSI Project
+Copyright holder / contact: aksilove@internet.ru · X @AKSILOVE
 All rights reserved.
 
-Unauthorized copying, modification, distribution, or use of this software,
-via any medium, is strictly prohibited without prior written permission.
+IMPORTANT
+---------
+This is proprietary software. Public visibility of source code on GitHub
+or GitHub Pages does NOT mean the Software is open source.
 
-Contact: aksilove@internet.ru
+Apache License, MIT, GPL, BSD, MPL, and similar open-source licenses
+do NOT apply to this repository or to the AKSI product, unless a separate
+written instrument expressly grants such terms for a specific file.
+
+
+1. DEFINITIONS
+--------------
+"Software" means all code, documentation, designs, algorithms, protocols,
+models of operation, configuration, branding, and materials in this
+repository and related AKSI deployments, including without limitation:
+
+  • AKSI runtime, Agent, Zero, FIR, Genesis, MATRIX, Decision Runtime
+  • ADIA / EQS / QCLI / Φ / scoring and ranking logic
+  • Seal, proof, attestation, ledger, and cryptographic integration layers
+  • Knowledge, memory, Neuro, Mind, HRR, P2P, commercial kits
+  • Names, marks, and product identity: AKSI, АКСИ, ADIA, EQS, QCLI,
+    Decision Runtime, and related designations
+
+"You" means any person or entity accessing the Software.
+
+
+2. OWNERSHIP
+------------
+The Software is and remains the exclusive proprietary property of the
+copyright holder. No title or ownership is transferred by access, fork,
+clone, star, or viewing public pages.
+
+
+3. NO LICENSE GRANT (DEFAULT)
+-----------------------------
+Except as expressly stated in section 4 (limited evaluation) or in a
+separate written commercial agreement signed by the copyright holder,
+NO license is granted to You.
+
+Viewing https://milana808.github.io or cloning this repository does not
+constitute a license grant.
+
+
+4. LIMITED EVALUATION (PERSONAL, NON-COMMERCIAL)
+------------------------------------------------
+You may, solely for personal non-commercial evaluation:
+
+  • run public demo pages in a browser;
+  • run a local copy offline on your own device to evaluate features.
+
+You may NOT under this section:
+
+  • use the Software in production, for clients, or inside an organization;
+  • offer SaaS, hosting, managed service, or white-label based on the Software;
+  • redistribute, sell, sublicense, or publish modified versions;
+  • remove copyright, LICENSE, NOTICE, or proprietary markings;
+  • claim authorship or ownership of AKSI / ADIA / related IP;
+  • use the Software to train or improve models that you redistribute
+    or commercialize.
+
+Any other use requires a prior written license from aksilove@internet.ru.
+
+
+5. RESTRICTIONS
+---------------
+Without prior written permission You must not:
+
+  a) copy, modify, merge, publish, distribute, sublicense, or sell the Software;
+  b) reverse engineer for the purpose of creating a competing product;
+  c) provide a competing hosted service substantially derived from the Software;
+  d) use AKSI, АКСИ, ADIA, EQS, QCLI, or confusingly similar marks
+     for another product without written consent;
+  e) strip or falsify seals, proofs, or attestation artifacts to misrepresent origin.
+
+
+6. THIRD-PARTY COMPONENTS
+-------------------------
+If individual files embed or depend on third-party open-source libraries,
+those libraries remain under their own licenses. That does not re-license
+AKSI proprietary code, algorithms, or product packaging as open source.
+
+
+7. TRADEMARKS
+-------------
+AKSI, АКСИ, ADIA, EQS, and related names are marks of the copyright holder.
+This file grants no trademark license.
+
+
+8. PATENT / PRIOR ART NOTICE
+----------------------------
+Public commits and documentation may describe architectures for verifiable
+AI responses and decision integrity. Publication does not waive proprietary
+rights in implementations, nor grant a patent license. Do not interpret
+git history as an open-source license.
+
+
+9. DISCLAIMER OF WARRANTY
+-------------------------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+
+10. LIMITATION OF LIABILITY
+---------------------------
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES,
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE,
+ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+
+11. TERMINATION
+---------------
+Any use outside this LICENSE automatically terminates the limited
+evaluation permission in section 4. On termination You must cease use
+of the Software and destroy copies made under evaluation, except as
+required by law.
+
+
+12. CONTACT — LICENSING
+-----------------------
+Commercial license, white-label, OEM, or written permission:
+  aksilove@internet.ru
+
+Public evaluation site:
+  https://milana808.github.io
+
+
+END OF TERMS
+
+
+--- Русская краткая сводка (не заменяет английский текст) ---
+
+Проприетарная лицензия AKSI. Исходный код на GitHub ≠ open source.
+Коммерческое использование, SaaS, white-label, продажа и распространение
+запрещены без письменного договора. Личная non-commercial evaluation
+публичных демо и локальный просмотр — допустимы. Apache/MIT/GPL
+не применяются. Лицензии: aksilove@internet.ru
