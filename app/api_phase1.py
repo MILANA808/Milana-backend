@@ -9,8 +9,10 @@ from pydantic import BaseModel, Field
 from app.core.crypto import get_crypto
 from app.core.reputation import compute_eqs
 from app import db_sqlite as db
+from app.api.web_gateway import router as internet_router
 
 router = APIRouter(tags=["phase1"])
+router.include_router(internet_router)
 
 _sessions: dict = {}
 
