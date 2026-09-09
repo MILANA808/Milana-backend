@@ -18,7 +18,6 @@ except ImportError:
 
 WIKI_HEADERS = {"User-Agent": "AKSI-Agent/0.7 (research; contact aksilove@internet.ru)"}
 
-
 @dataclass
 class AgentResult:
     agent: str
@@ -26,31 +25,18 @@ class AgentResult:
     answer: str
     ok: bool = True
     meta: Dict[str, Any] = field(default_factory=dict)
-
     def signed(self) -> Dict[str, Any]:
-        return {
-            "agent": self.agent,
-            "task": self.task,
-            "answer": self.answer,
-            "ok": self.ok,
-            "meta": self.meta,
-            "signature": sign_short(f"{self.agent}|{self.answer}")[:24],
-            "ts": datetime.utcnow().isoformat() + "Z",
-        }
-
+        return {"agent": self.agent, "task": self.task, "answer": self.answer, "ok": self.ok, "meta": self.meta, "signature": sign_short(f"{self.agent}|{self.answer}")[:24], "ts": datetime.utcnow().isoformat() + "Z"}
 
 class BaseAgent:
     name = "base"
     role = "generic"
-
     async def run(self, task: str, context: Optional[str] = None) -> AgentResult:
         raise NotImplementedError
-
 
 class ResearchAgent(BaseAgent):
     name = "research"
     role = "факты и источники"
-
     async def run(self, task: str, context: Optional[str] = None) -> AgentResult:
         q = re.sub(r"^(что такое|почему|расскажи про|who is|what is)\s+", "", task, flags=re.I).strip() or task
         if httpx is None:
@@ -78,22 +64,18 @@ class ResearchAgent(BaseAgent):
         except Exception as e:
             return AgentResult(self.name, task, f"Research ошибка: {type(e).__name__}", False)
 
-
 class AnalystAgent(BaseAgent):
     name = "analyst"
     role = "разбор и план"
-
     async def run(self, task: str, context: Optional[str] = None) -> AgentResult:
         steps = [f"1. Вопрос: {task[:120]}", "2. Выделить факты vs оценки", "3. Проверить источники (Research)", "4. Сформулировать ясный вывод", "5. Отметить неуверенность, если данных мало"]
         if context:
             steps.insert(1, f"1b. Контекст: {context[:100]}…")
         return AgentResult(self.name, task, "Ход Analyst:\n" + "\n".join(steps), True, {"steps": len(steps)})
 
-
 class CoderAgent(BaseAgent):
     name = "coder"
     role = "код и архитектура"
-
     async def run(self, task: str, context: Optional[str] = None) -> AgentResult:
         low = task.lower()
         if any(k in low for k in ("fastapi", "backend", "api")):
@@ -106,44 +88,36 @@ class CoderAgent(BaseAgent):
             ans = "Coder: уточните стек (Python/JS/API). Общий совет — модули, тесты, .env для ключей."
         return AgentResult(self.name, task, ans, True)
 
-
 class GuardianAgent(BaseAgent):
     name = "guardian"
     role = "кодекс и безопасность"
     BLOCK = [re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)", re.I), re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)", re.I)]
-
     async def run(self, task: str, context: Optional[str] = None) -> AgentResult:
         for pat in self.BLOCK:
             if pat.search(task or ""):
                 return AgentResult(self.name, task, "Guardian: отказ — запрос нарушает Кодекс (вред людям).", False, {"codex": "block"})
         return AgentResult(self.name, task, "Guardian: ок — можно отвечать. Правила: правда, источники, без вреда.", True, {"codex": "ok"})
 
-
 class ResonatorAgent(BaseAgent):
     name = "resonator"
     role = "identity и подпись"
-
     async def run(self, task: str, context: Optional[str] = None) -> AgentResult:
         from app.core.resonance import identity_block
         idb = identity_block()
-        # Never return the signing seed/key material. Identity metadata is public; the signer is not.
         ans = f"Resonator: агент АКСИ.\nDID: {idb.get('did')}\nContact: {idb.get('contact')}\nЗадача принята: {task[:80]}"
         return AgentResult(self.name, task, ans, True, {"did": idb.get("did")})
 
-
 AGENTS: Dict[str, BaseAgent] = {"research": ResearchAgent(), "analyst": AnalystAgent(), "coder": CoderAgent(), "guardian": GuardianAgent(), "resonator": ResonatorAgent()}
-
 
 def list_agents() -> List[Dict[str, str]]:
     return [{"name": a.name, "role": a.role} for a in AGENTS.values()]
-
 
 async def run_agent(name: str, task: str, context: Optional[str] = None) -> Dict[str, Any]:
     agent = AGENTS.get(name)
     if not agent:
         return {"ok": False, "error": f"unknown agent: {name}", "known": list(AGENTS)}
-    return agent.run and (await agent.run(task, context)).signed()
-
+    result = await agent.run(task, context)
+    return result.signed()
 
 async def run_swarm(task: str, context: Optional[str] = None) -> Dict[str, Any]:
     order = ["guardian", "resonator", "analyst", "research", "coder"]
