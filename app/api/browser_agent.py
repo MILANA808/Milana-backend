@@ -7,9 +7,11 @@ set browser_actions=true, and UI-mutating actions require a task-scoped one-time
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import ipaddress
 import secrets
 import socket
+from datetime import datetime, timezone
 from typing import Any, Dict
 from urllib.parse import urlparse
 
@@ -71,15 +73,14 @@ def _safe_public_url(url: str) -> str:
 
 def _consume_approval(task_id: str, token: str, action: str) -> Dict[str, Any]:
     """Consume a single-use approval token for exactly one browser action."""
-    import hashlib
     task = load_task(task_id)
     if not task:
         raise HTTPException(404, "Task not found")
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     for approval in task.get("approvals", []):
         if approval.get("token_hash") == token_hash and approval.get("status") == "GRANTED" and approval.get("action") == action:
-            approval.update({"status": "CONSUMED", "consumed_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "token_hash": None})
-            task["updated_at"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+            approval.update({"status": "CONSUMED", "consumed_at": datetime.now(timezone.utc).isoformat(), "token_hash": None})
+            task["updated_at"] = datetime.now(timezone.utc).isoformat()
             persist_task(task)
             return approval
     raise HTTPException(403, "Invalid, revoked, already consumed, or action-mismatched approval token")
