@@ -1,12 +1,13 @@
 """AKSI Core control plane: runtime, live events, approvals."""
 from __future__ import annotations
-import asyncio, hashlib, json, secrets
+import asyncio, hashlib, importlib, json, secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from app.task_store import get as load_task, save as persist_task
 router=APIRouter(prefix="/api/core",tags=["AKSI Core"])
+MODULES=["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core"]
 def now(): return datetime.now(timezone.utc).isoformat()
 def token_hash(token): return hashlib.sha256(token.encode()).hexdigest()
 class ApprovalRequest(BaseModel):
@@ -14,7 +15,21 @@ class ApprovalRequest(BaseModel):
 class ApprovalUse(BaseModel): token:str=Field(min_length=16,max_length=200)
 @router.get("/runtime")
 async def runtime():
-    return {"ok":True,"name":"AKSI Core","protocol":"AKSI-VAI/1","architecture":["identity","memory","model","tools","policy","evidence","decision","receipt"],"task_states":["CREATED","PLANNING","RESEARCHING","ANALYZING","VERIFYING","COMPLETED","FAILED","STOPPED","NEEDS_PERMISSION","RECOVERABLE"],"external_actions":"approval_required","chain_of_thought":"not_exposed","timestamp":now()}
+    worker="unknown"
+    try:
+        from app.api.web_agent import WORKER_TASK
+        worker="running" if WORKER_TASK and not WORKER_TASK.done() else "stopped"
+    except Exception: pass
+    return {"ok":True,"name":"AKSI Core","protocol":"AKSI-VAI/1","architecture":["identity","memory","model","tools","policy","evidence","decision","receipt"],"task_states":["CREATED","PLANNING","RESEARCHING","ANALYZING","VERIFYING","COMPLETED","FAILED","STOPPED","NEEDS_PERMISSION","RECOVERABLE"],"external_actions":"approval_required","chain_of_thought":"not_exposed","worker":worker,"timestamp":now()}
+@router.get("/diagnostics/modules")
+async def diagnostics_modules():
+    result={}
+    for name in MODULES:
+        try:
+            module=importlib.import_module(name); result[name]={"ok":True,"router":hasattr(module,"router")}
+        except Exception as exc:
+            result[name]={"ok":False,"error_type":type(exc).__name__,"error":str(exc)[:500]}
+    return {"ok":all(item["ok"] for item in result.values()),"modules":result}
 @router.get("/tasks/{task_id}/events")
 async def events(task_id:str):
     if not load_task(task_id): raise HTTPException(404,"Task not found")
