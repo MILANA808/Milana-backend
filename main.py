@@ -1,6 +1,6 @@
 """
-Milana-backend (AKSI) v0.8.1
-Identity · Chat · Agents · Web Task Runtime · Admin · World search · Codex · LLM · Memory · Resonance · Seal
+Milana-backend (AKSI) v0.8.2
+Identity · Chat · Agents · Web Task Runtime · Browser · Admin · World search · Codex · LLM · Memory · Resonance · Seal
 Copyright (c) AKSI Project
 """
 
@@ -59,11 +59,16 @@ try:
     WEB_AGENT_AVAILABLE = True
 except ImportError:
     WEB_AGENT_AVAILABLE = False; web_agent_router = None
+try:
+    from app.api.browser_agent import router as browser_agent_router
+    BROWSER_AGENT_AVAILABLE = True
+except ImportError:
+    BROWSER_AGENT_AVAILABLE = False; browser_agent_router = None
 
-VERSION = "0.8.1"
+VERSION = "0.8.2"
 CODEX = {"version":"1.0","title":"Кодекс Суверенного ИИ АКСИ","rules":["Не выдумывать факты; указывать источники","Признавать неуверенность","Показывать ход рассуждения где уместно","Отказ при вреде людям / эксплуатации","Identity (DID) — ответственность, не маркетинг"],"url":"https://milana808.github.io/CODEX.md"}
 BLOCK_PATTERNS = [(re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)",re.I),"вред"),(re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)",re.I),"harm")]
-app = FastAPI(title="Milana-backend (AKSI)",description="Sovereign AI API · agents · web tasks · search · codex · identity · llm · seal",version=VERSION)
+app = FastAPI(title="Milana-backend (AKSI)",description="Sovereign AI API · agents · web tasks · browser · search · codex · identity · llm · seal",version=VERSION)
 _cors_origins=[x.strip() for x in os.getenv("AKSI_CORS_ORIGINS","*").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=_cors_origins,allow_credentials=False,allow_methods=["*"],allow_headers=["*"])
 try:
@@ -77,6 +82,7 @@ if ADMIN_AVAILABLE and admin_router: app.include_router(admin_router)
 if IDENTITY_AVAILABLE and identity_router: app.include_router(identity_router)
 if AGENTS_AVAILABLE and agents_router: app.include_router(agents_router)
 if WEB_AGENT_AVAILABLE and web_agent_router: app.include_router(web_agent_router)
+if BROWSER_AGENT_AVAILABLE and browser_agent_router: app.include_router(browser_agent_router)
 ADMIN_DIR=Path(__file__).parent/"admin"
 if ADMIN_DIR.is_dir(): app.mount("/admin-ui",StaticFiles(directory=str(ADMIN_DIR),html=True),name="admin-ui")
 @app.on_event("startup")
@@ -117,9 +123,9 @@ async def arxiv_search(q:str)->Optional[dict]:
     except Exception:return None
 @app.get("/")
 async def root():
-    return {"service":"Milana-backend (AKSI)","version":VERSION,"status":"running","identity":{"did":"did:aksi:ed25519:sovereign-2026","contact":"aksilove@internet.ru"},"modules":{"phase1_identity_auth":PHASE1_AVAILABLE,"chat_stream":CHAT_AVAILABLE,"admin":ADMIN_AVAILABLE,"identity":IDENTITY_AVAILABLE,"agents_swarm":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"aksi_v2":AKSI_V2_AVAILABLE,"world_search":True,"codex":True,"llm_memory_resonance":True,"seal_middleware":SEAL_MIDDLEWARE},"try":["GET /health","GET /aksi/seal/public","POST /echo","POST /api/chat","POST /api/agent/tasks","POST /api/world/search","/docs"],"frontend":"https://milana808.github.io/aksi/"}
+    return {"service":"Milana-backend (AKSI)","version":VERSION,"status":"running","identity":{"did":"did:aksi:ed25519:sovereign-2026","contact":"aksilove@internet.ru"},"modules":{"phase1_identity_auth":PHASE1_AVAILABLE,"chat_stream":CHAT_AVAILABLE,"admin":ADMIN_AVAILABLE,"identity":IDENTITY_AVAILABLE,"agents_swarm":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"browser_agent":BROWSER_AGENT_AVAILABLE,"aksi_v2":AKSI_V2_AVAILABLE,"world_search":True,"codex":True,"llm_memory_resonance":True,"seal_middleware":SEAL_MIDDLEWARE},"try":["GET /health","GET /aksi/seal/public","POST /echo","POST /api/chat","POST /api/agent/tasks","POST /api/agent/browser/sessions","POST /api/world/search","/docs"],"frontend":"https://milana808.github.io/aksi/"}
 @app.get("/health")
-async def health(): return {"seal_middleware":SEAL_MIDDLEWARE,"status":"healthy","timestamp":datetime.utcnow().isoformat(),"service":"milana-backend","version":VERSION,"chat":CHAT_AVAILABLE,"agents":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"admin":ADMIN_AVAILABLE,"identity":IDENTITY_AVAILABLE,"httpx":HTTPX}
+async def health(): return {"seal_middleware":SEAL_MIDDLEWARE,"status":"healthy","timestamp":datetime.utcnow().isoformat(),"service":"milana-backend","version":VERSION,"chat":CHAT_AVAILABLE,"agents":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"browser_agent":BROWSER_AGENT_AVAILABLE,"admin":ADMIN_AVAILABLE,"identity":IDENTITY_AVAILABLE,"httpx":HTTPX}
 @app.get("/version")
 async def version(): return {"version":VERSION,"api":"aksi-backend","author":"AKSI Project","contact":"aksilove@internet.ru"}
 @app.get("/api/codex")
