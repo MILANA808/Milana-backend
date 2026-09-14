@@ -1,15 +1,15 @@
 """AKSI Core control plane: runtime, live events, approvals."""
 from __future__ import annotations
-import asyncio, hashlib, importlib, json, secrets
+import asyncio, importlib, json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from app.task_store import get as load_task, save as persist_task
+from app.task_store import get as load_task
+from app.approval import request_approval as create_approval, grant_approval as grant_token, revoke_approval as revoke_token, public_approvals, consume_approval
 router=APIRouter(prefix="/api/core",tags=["AKSI Core"])
 MODULES=["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core"]
 def now(): return datetime.now(timezone.utc).isoformat()
-def token_hash(token): return hashlib.sha256(token.encode()).hexdigest()
 class ApprovalRequest(BaseModel):
     action:str=Field(min_length=1,max_length=100); reason:str=Field(default="",max_length=1000)
 class ApprovalUse(BaseModel): token:str=Field(min_length=16,max_length=200)
@@ -27,8 +27,7 @@ async def diagnostics_modules():
     for name in MODULES:
         try:
             module=importlib.import_module(name); result[name]={"ok":True,"router":hasattr(module,"router")}
-        except Exception as exc:
-            result[name]={"ok":False,"error_type":type(exc).__name__,"error":str(exc)[:500]}
+        except Exception as exc: result[name]={"ok":False,"error_type":type(exc).__name__,"error":str(exc)[:500]}
     return {"ok":all(item["ok"] for item in result.values()),"modules":result}
 @router.get("/tasks/{task_id}/events")
 async def events(task_id:str):
@@ -47,39 +46,19 @@ async def events(task_id:str):
     return StreamingResponse(stream(),media_type="text/event-stream",headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
 @router.post("/tasks/{task_id}/approval")
 async def request_approval(task_id:str,body:ApprovalRequest):
-    task=load_task(task_id)
-    if not task: raise HTTPException(404,"Task not found")
-    approval={"id":"approval-"+secrets.token_hex(8),"action":body.action,"reason":body.reason,"status":"PENDING","created_at":now()}
-    task.setdefault("approvals",[]).append(approval); task["updated_at"]=now(); persist_task(task)
+    approval=await create_approval(task_id,body.action,body.reason)
     return {"ok":True,"approval":approval}
 @router.post("/tasks/{task_id}/approval/{approval_id}/grant")
 async def grant_approval(task_id:str,approval_id:str):
-    task=load_task(task_id)
-    if not task: raise HTTPException(404,"Task not found")
-    for a in task.get("approvals",[]):
-        if a.get("id")==approval_id:
-            if a.get("status")!="PENDING": raise HTTPException(409,"Approval is not pending")
-            token="aksi-approval-"+secrets.token_urlsafe(24); a.update({"status":"GRANTED","token_hash":token_hash(token),"granted_at":now()}); task["updated_at"]=now(); persist_task(task)
-            return {"ok":True,"approval_id":approval_id,"status":"GRANTED","token":token}
-    raise HTTPException(404,"Approval not found")
+    token=await grant_token(task_id,approval_id)
+    return {"ok":True,"approval_id":approval_id,"status":"GRANTED","token":token}
 @router.post("/tasks/{task_id}/approval/{approval_id}/revoke")
 async def revoke_approval(task_id:str,approval_id:str):
-    task=load_task(task_id)
-    if not task: raise HTTPException(404,"Task not found")
-    for a in task.get("approvals",[]):
-        if a.get("id")==approval_id:
-            a.update({"status":"REVOKED","token_hash":None,"revoked_at":now()}); task["updated_at"]=now(); persist_task(task); return {"ok":True,"approval_id":approval_id,"status":"REVOKED"}
-    raise HTTPException(404,"Approval not found")
+    await revoke_token(task_id,approval_id)
+    return {"ok":True,"approval_id":approval_id,"status":"REVOKED"}
 @router.get("/tasks/{task_id}/approvals")
-async def approvals(task_id:str):
-    task=load_task(task_id)
-    if not task: raise HTTPException(404,"Task not found")
-    return {"ok":True,"approvals":[{k:v for k,v in a.items() if k not in {"token","token_hash"}} for a in task.get("approvals",[])]}
+async def approvals(task_id:str): return {"ok":True,"approvals":public_approvals(task_id)}
 @router.post("/tasks/{task_id}/approval/consume")
-async def consume_approval(task_id:str,body:ApprovalUse):
-    task=load_task(task_id)
-    if not task: raise HTTPException(404,"Task not found")
-    for a in task.get("approvals",[]):
-        if a.get("token_hash")==token_hash(body.token) and a.get("status")=="GRANTED":
-            a.update({"status":"CONSUMED","consumed_at":now(),"token_hash":None}); task["updated_at"]=now(); persist_task(task); return {"ok":True,"approval_id":a["id"],"action":a["action"]}
-    raise HTTPException(403,"Invalid, revoked, or already consumed approval token")
+async def consume_approval_route(task_id:str,body:ApprovalUse):
+    approval=await consume_approval(task_id,body.token,"*")
+    return {"ok":True,"approval_id":approval["id"],"action":approval["action"]}
