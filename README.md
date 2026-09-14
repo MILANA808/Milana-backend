@@ -3,14 +3,23 @@
 ⚠ **Proprietary Project — All Rights Reserved © 2025 AKSI Project**\
 Unauthorized use or reproduction is strictly prohibited.
 
-Integrated platform combining the Milana web portal, AKSI DevOps AI Connector, and backend services.
+Integrated platform combining the Milana web portal, AKSI agent runtime, browser computer-use, provenance, memory and backend services.
 
-## Overview
+## AKSI Infinity Agent
 
-This repository integrates functionality from multiple AKSI projects:
-- **Milana Web Portal** (`frontend/`): Interactive web interface with 21 AI-powered applications
-- **AKSI Signing Infrastructure** (`.aksi/`, `.github/workflows/`): Cryptographic signing for releases
-- **Backend API Services**: FastAPI endpoints for AKSI/Milana services
+AKSI Infinity is a model-independent agent runtime. A task can be planned, researched on the public web, analyzed, verified and returned as a structured report with an integrity receipt. With explicit permission, the runtime can also use a Playwright browser session for computer-use actions.
+
+### Agent capabilities
+
+- Public web search and page extraction
+- Browser navigation, reading, screenshots, clicking and form input
+- Task journal and bounded background execution
+- Model gateway for analysis
+- Evidence and source tracking
+- Integrity receipts (`AKSI-VAI/1`)
+- Explicit permissions for internet, browser actions, downloads, memory and external actions
+
+Browser deployment requires Chromium; the Docker image installs it automatically.
 
 ## Quick Start
 
@@ -27,6 +36,7 @@ Server: http://localhost:8000
 Docs: http://localhost:8000/docs
 
 ### Docker
+
 ```bash
 docker-compose up -d
 ```
@@ -34,14 +44,18 @@ docker-compose up -d
 ## Identity
 
 - DID: `did:aksi:ed25519:sovereign-2026`
-- Seed: `AKSI_DIMAX_v3_2026`
 - Contact: **aksilove@internet.ru**
+
+Private signing material is never stored in public source files. Configure secrets through deployment environment/secret storage.
 
 ## Main endpoints
 
 - `GET /health`
 - `GET /api/identity`
 - `POST /api/chat` · `POST /api/aksi/chat`
+- `POST /api/agent/tasks`
+- `GET /api/agent/tasks/{task_id}`
+- `POST /api/agent/browser/sessions`
 - `POST /api/world/search`
 - `GET /api/codex`
 - Admin UI: `/admin-ui/`
