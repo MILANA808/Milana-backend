@@ -1,4 +1,4 @@
-"""Milana-backend (AKSI) v0.8.3 — sovereign AI API + durable Infinity runtime."""
+"""Milana-backend (AKSI) v0.8.4 — sovereign AI API + Infinity + AKSI Core."""
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -38,19 +38,22 @@ try:
     from app.api.browser_agent import router as browser_agent_router; BROWSER_AGENT_AVAILABLE=True
 except ImportError: BROWSER_AGENT_AVAILABLE=False; browser_agent_router=None
 try:
+    from app.api.core import router as core_router; CORE_AVAILABLE=True
+except ImportError: CORE_AVAILABLE=False; core_router=None
+try:
     from app.task_store import init as task_store_init; TASK_STORE_AVAILABLE=True
 except ImportError: TASK_STORE_AVAILABLE=False; task_store_init=None
 
-VERSION="0.8.3"
+VERSION="0.8.4"
 CODEX={"version":"1.0","title":"Кодекс Суверенного ИИ АКСИ","rules":["Не выдумывать факты; указывать источники","Признавать неуверенность","Не выполнять вредоносные действия","Identity (DID) — ответственность, не маркетинг"],"url":"https://milana808.github.io/CODEX.md"}
 BLOCK_PATTERNS=[(re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)",re.I),"вред"),(re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)",re.I),"harm")]
-app=FastAPI(title="Milana-backend (AKSI)",description="Sovereign AI API · agents · durable web tasks · browser · search · llm · seal",version=VERSION)
+app=FastAPI(title="Milana-backend (AKSI)",description="AKSI Core · sovereign AI · durable agent runtime · browser · evidence · receipt",version=VERSION)
 _origins=[x.strip() for x in os.getenv("AKSI_CORS_ORIGINS","*").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=_origins,allow_credentials=False,allow_methods=["*"],allow_headers=["*"])
 try:
     from app.middleware.aksi_seal import AksiSealMiddleware; app.add_middleware(AksiSealMiddleware); SEAL_MIDDLEWARE=True
 except ImportError: SEAL_MIDDLEWARE=False
-for enabled,router in [(AKSI_V2_AVAILABLE,aksi_v2_router),(PHASE1_AVAILABLE,phase1_router),(CHAT_AVAILABLE,chat_router),(ADMIN_AVAILABLE,admin_router),(IDENTITY_AVAILABLE,identity_router),(AGENTS_AVAILABLE,agents_router),(WEB_AGENT_AVAILABLE,web_agent_router),(BROWSER_AGENT_AVAILABLE,browser_agent_router)]:
+for enabled,router in [(AKSI_V2_AVAILABLE,aksi_v2_router),(PHASE1_AVAILABLE,phase1_router),(CHAT_AVAILABLE,chat_router),(ADMIN_AVAILABLE,admin_router),(IDENTITY_AVAILABLE,identity_router),(AGENTS_AVAILABLE,agents_router),(WEB_AGENT_AVAILABLE,web_agent_router),(BROWSER_AGENT_AVAILABLE,browser_agent_router),(CORE_AVAILABLE,core_router)]:
     if enabled and router: app.include_router(router)
 ADMIN_DIR=Path(__file__).parent/"admin"
 if ADMIN_DIR.is_dir(): app.mount("/admin-ui",StaticFiles(directory=str(ADMIN_DIR),html=True),name="admin-ui")
@@ -80,7 +83,7 @@ async def wiki_search(q):
         async with httpx.AsyncClient(timeout=8) as c:
             r=await c.get("https://ru.wikipedia.org/w/api.php",params={"action":"opensearch","search":clean,"limit":1,"namespace":0,"format":"json"});d=r.json();title=d[1][0] if len(d)>1 and d[1] else None
             if not title:return None
-            s=await c.get(f"https://ru.wikipedia.org/api/rest_v1/page/summary/{title}");j=s.json();return {"text":f"{j.get('title',title)}. {(j.get('extract') or '')[:700]}","source":"Wikipedia","url":(j.get('content_urls') or {}).get('desktop',{}).get('page',"")}
+            s=await c.get(f"https://ru.wikipedia.org/api/rest_v1/page/summary/{title}");j=s.json();return {"text":f"{j.get('title',title)}. {(j.get('extract') or '')[:700]}","source":"Wikipedia","url":(j.get('content_urls') or {}).get('desktop',{}).get('page","")}
     except Exception:return None
 async def arxiv_search(q):
     if not HTTPX:return None
@@ -89,9 +92,9 @@ async def arxiv_search(q):
             r=await c.get("https://export.arxiv.org/api/query",params={"search_query":f"all:{q[:80]}","start":0,"max_results":1});t=re.findall(r"<title>([^<]+)</title>",r.text);ids=re.findall(r"<id>(https://arxiv.org/abs/[^<]+)</id>",r.text);return {"text":f"arXiv: {t[1]}","source":"arXiv","url":ids[0] if ids else ""} if len(t)>1 else None
     except Exception:return None
 @app.get("/")
-async def root(): return {"service":"Milana-backend (AKSI)","version":VERSION,"status":"running","modules":{"phase1":PHASE1_AVAILABLE,"chat":CHAT_AVAILABLE,"agents":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"browser_agent":BROWSER_AGENT_AVAILABLE,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE},"try":["GET /health","POST /api/agent/tasks","GET /api/agent/tasks","POST /api/agent/browser/sessions","POST /api/world/search","/docs"]}
+async def root(): return {"service":"Milana-backend (AKSI)","version":VERSION,"status":"running","modules":{"core":CORE_AVAILABLE,"phase1":PHASE1_AVAILABLE,"chat":CHAT_AVAILABLE,"agents":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"browser_agent":BROWSER_AGENT_AVAILABLE,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE},"try":["GET /health","GET /api/core/runtime","POST /api/agent/tasks","GET /api/agent/tasks","GET /api/core/tasks/{id}/events","POST /api/agent/browser/sessions","/docs"]}
 @app.get("/health")
-async def health(): return {"status":"healthy","version":VERSION,"timestamp":datetime.utcnow().isoformat(),"chat":CHAT_AVAILABLE,"agents":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"browser_agent":BROWSER_AGENT_AVAILABLE,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE,"httpx":HTTPX}
+async def health(): return {"status":"healthy","version":VERSION,"timestamp":datetime.utcnow().isoformat(),"core":CORE_AVAILABLE,"chat":CHAT_AVAILABLE,"agents":AGENTS_AVAILABLE,"web_agent":WEB_AGENT_AVAILABLE,"browser_agent":BROWSER_AGENT_AVAILABLE,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE,"httpx":HTTPX}
 @app.get("/version")
 async def version(): return {"version":VERSION,"api":"aksi-backend","author":"AKSI Project"}
 @app.get("/api/codex")
