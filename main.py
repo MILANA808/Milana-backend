@@ -11,7 +11,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-VERSION = "0.8.4"
+VERSION = "0.8.5"
 CODEX = {"version":"1.0","title":"Кодекс Суверенного ИИ АКСИ","rules":["Не выдумывать факты; указывать источники","Признавать неуверенность","Не выполнять вредоносные действия","Identity (DID) — ответственность, не маркетинг"],"url":"https://milana808.github.io/CODEX.md"}
 BLOCK_PATTERNS = [(re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)",re.I),"вред"),(re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)",re.I),"harm")]
 app = FastAPI(title="Milana-backend (AKSI)", description="AKSI Core · sovereign AI · Infinity · browser · evidence · receipt", version=VERSION)
@@ -33,7 +33,6 @@ try:
     from app.middleware.aksi_seal import AksiSealMiddleware
     app.add_middleware(AksiSealMiddleware); SEAL_MIDDLEWARE=True
 except Exception: SEAL_MIDDLEWARE=False
-
 try:
     from app.task_store import init as task_store_init
     TASK_STORE_AVAILABLE=True
@@ -41,7 +40,6 @@ except Exception: TASK_STORE_AVAILABLE=False; task_store_init=None
 
 ADMIN_DIR=Path(__file__).parent/"admin"
 if ADMIN_DIR.is_dir(): app.mount("/admin-ui",StaticFiles(directory=str(ADMIN_DIR),html=True),name="admin-ui")
-
 logs_storage=[]; proof_storage=[]; ai_work_sessions=[]; crypto_keys_storage=[]
 ai_code_metrics={"total_sessions":0,"total_code_changes":0,"total_lines_modified":0,"total_files_touched":0,"total_commits":0,"languages":defaultdict(int),"operations":defaultdict(int),"session_durations":[],"error_rate":0.0,"success_rate":100.0}
 aksi_metrics={"eqs":0.72,"empathy_boost":0.25,"grid_system":"3x3","status":"active","ai_code_work":ai_code_metrics}
@@ -49,6 +47,19 @@ aksi_metrics={"eqs":0.72,"empathy_boost":0.25,"grid_system":"3x3","status":"acti
 @app.on_event("startup")
 async def startup():
     if TASK_STORE_AVAILABLE and task_store_init: task_store_init()
+    try:
+        from app.api.web_agent import start_worker
+        await start_worker()
+    except Exception:
+        pass
+
+@app.on_event("shutdown")
+async def shutdown():
+    try:
+        from app.api.web_agent import stop_worker
+        stop_worker()
+    except Exception:
+        pass
 
 class EchoRequest(BaseModel): message:str
 class ProofStableRequest(BaseModel): signature:str; timestamp:Optional[str]=None; metrics:Optional[dict]=None
@@ -89,18 +100,15 @@ async def arxiv_search(q):
 @app.get("/")
 async def root():
     return {"service":"Milana-backend (AKSI)","version":VERSION,"status":"running","architecture":"AKSI Core","modules":{"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE},"try":["GET /health","GET /api/core/runtime","POST /api/agent/tasks","GET /api/core/tasks/{id}/events","POST /api/core/tasks/{id}/approval"]}
-
 @app.get("/health")
 async def health():
     return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE}
-
 @app.get("/version")
 async def version(): return {"version":VERSION,"api":"aksi-backend","author":"AKSI Project"}
 @app.get("/api/codex")
 async def get_codex(): return CODEX
 @app.post("/api/codex/check")
 async def check_codex(body:CodexCheckRequest): return codex_check(body.text)
-
 @app.post("/api/world/search")
 async def world_search(body:WorldSearchRequest):
     gate=codex_check(body.q)
@@ -113,7 +121,6 @@ async def world_search(body:WorldSearchRequest):
     return {"ok":True,"q":body.q,"text":"\n\n".join(x["text"] for x in results) if results else None,"sources":[x["source"]+(f" {x['url']}" if x.get('url') else "") for x in results],"results":results,"timestamp":datetime.now(timezone.utc).isoformat()}
 @app.get("/api/world/search")
 async def world_search_get(q:str=Query(...,min_length=1)): return await world_search(WorldSearchRequest(q=q))
-
 @app.post("/echo")
 async def echo(request:EchoRequest): return {"echo":request.message,"timestamp":datetime.now(timezone.utc).isoformat(),"length":len(request.message)}
 @app.get("/aksi/metrics")
@@ -123,9 +130,8 @@ async def proof(): return {"proof":{"eqs":aksi_metrics["eqs"],"model":"Ψ(AKSI)"
 @app.get("/aksi/seal/public")
 async def seal_public():
     try:
-        from app.core.crypto import get_crypto; c=get_crypto()
-        return {"did":c.get_did(),"alg":"Ed25519","publicKeyB64":c.public_key_b64(),"publicKeyPem":c.public_key_pem(),"kid":f"{c.get_did()}#key-1"}
-    except Exception as e: return {"ok":False,"error":str(e)}
+        from app.core.crypto import get_crypto; c=get_crypto(); return {"did":c.get_did(),"alg":"Ed25519","publicKeyB64":c.public_key_b64(),"publicKeyPem":c.public_key_pem(),"kid":f"{c.get_did()}#key-1"}
+    except Exception as e:return {"ok":False,"error":str(e)}
 @app.post("/aksi/seal/verify")
 async def seal_verify(body:dict):
     from app.core.crypto import get_crypto
@@ -157,6 +163,5 @@ async def record_key(request:CryptoKeyRecordRequest):
     rec={"key_id":secrets.token_hex(8),"key_hash":hashlib.sha256(request.public_key.encode()).hexdigest(),"key_type":request.key_type,"created_at":datetime.now(timezone.utc).isoformat()}; crypto_keys_storage.append(rec); return {"status":"key_recorded","key_id":rec["key_id"]}
 @app.get("/aksi/crypto/keys")
 async def keys(limit:int=50): return {"keys":crypto_keys_storage[-limit:]}
-
 if __name__=="__main__":
     import uvicorn; uvicorn.run(app,host="0.0.0.0",port=8000)
