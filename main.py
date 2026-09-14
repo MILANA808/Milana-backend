@@ -1,7 +1,7 @@
 """Milana-backend (AKSI) v0.8.4 — sovereign AI API + Infinity + AKSI Core."""
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from datetime import datetime
