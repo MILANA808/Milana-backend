@@ -7,6 +7,7 @@ os.environ["AKSI_TASK_DB"] = "/tmp/aksi-test-tasks.sqlite3"
 from fastapi.testclient import TestClient
 
 from app import task_store
+from app.approval import consume_approval
 from main import app
 
 
@@ -28,7 +29,6 @@ def test_health_and_core_runtime():
         health = client.get("/health")
         assert health.status_code == 200
         assert health.json()["status"] == "healthy"
-
         runtime = client.get("/api/core/runtime")
         assert runtime.status_code == 200
         body = runtime.json()
@@ -40,84 +40,87 @@ def test_health_and_core_runtime():
 def test_task_persists_and_requires_internet_permission():
     task_store.init()
     with TestClient(app) as client:
-        response = client.post(
-            "/api/agent/tasks",
-            json={
-                "goal": "Проверить lifecycle runtime",
-                "permissions": {"internet": False, "read_pages": True},
-            },
-        )
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить lifecycle runtime", "permissions": {"internet": False, "read_pages": True}})
         assert response.status_code == 200
         task_id = response.json()["task"]["id"]
-
         assert wait_for_status(client, task_id, {"NEEDS_PERMISSION"}) == "NEEDS_PERMISSION"
         persisted = task_store.get(task_id)
-        assert persisted is not None
-        assert persisted["id"] == task_id
+        assert persisted is not None and persisted["id"] == task_id
         assert any("требуется разрешение" in x["message"] for x in persisted["journal"])
 
 
 def test_approval_token_is_single_use():
     task_store.init()
     with TestClient(app) as client:
-        response = client.post(
-            "/api/agent/tasks",
-            json={
-                "goal": "Проверить approval lifecycle",
-                "permissions": {"internet": False},
-            },
-        )
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить approval lifecycle", "permissions": {"internet": False}})
         task_id = response.json()["task"]["id"]
         wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
-
-        requested = client.post(
-            f"/api/core/tasks/{task_id}/approval",
-            json={"action": "browser.interact", "reason": "explicit test approval"},
-        )
+        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.interact", "reason": "explicit test approval"})
         assert requested.status_code == 200
         approval_id = requested.json()["approval"]["id"]
-
         granted = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant")
         assert granted.status_code == 200
         token = granted.json()["token"]
-        assert token
-
-        consumed = client.post(
-            f"/api/core/tasks/{task_id}/approval/consume",
-            json={"token": token},
-        )
-        assert consumed.status_code == 200
-        assert consumed.json()["action"] == "browser.interact"
-
-        replay = client.post(
-            f"/api/core/tasks/{task_id}/approval/consume",
-            json={"token": token},
-        )
+        consumed = client.post(f"/api/core/tasks/{task_id}/approval/consume", json={"token": token})
+        assert consumed.status_code == 200 and consumed.json()["action"] == "browser.interact"
+        replay = client.post(f"/api/core/tasks/{task_id}/approval/consume", json={"token": token})
         assert replay.status_code == 403
-
         approvals = client.get(f"/api/core/tasks/{task_id}/approvals")
-        assert approvals.status_code == 200
-        assert approvals.json()["approvals"][0]["status"] == "CONSUMED"
+        assert approvals.status_code == 200 and approvals.json()["approvals"][0]["status"] == "CONSUMED"
+
+
+def test_browser_approval_is_action_scoped_and_one_time():
+    task_store.init()
+    with TestClient(app) as client:
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить browser approval", "permissions": {"internet": False}})
+        task_id = response.json()["task"]["id"]
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
+        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click", "reason": "test click"})
+        approval_id = requested.json()["approval"]["id"]
+        token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant").json()["token"]
+        wrong_action = client.post(f"/api/agent/browser/sessions/not-real/click", json={"selector": "#x", "approval_token": token})
+        assert wrong_action.status_code == 404  # session validation happens before token consumption
+        from app.approval import consume_approval
+        import asyncio
+        try:
+            asyncio.run(consume_approval(task_id, token, "browser.type"))
+            assert False, "action-mismatched token was accepted"
+        except Exception as exc:
+            assert getattr(exc, "status_code", None) == 403
+        asyncio.run(consume_approval(task_id, token, "browser.click"))
+        try:
+            asyncio.run(consume_approval(task_id, token, "browser.click"))
+            assert False, "replayed token was accepted"
+        except Exception as exc:
+            assert getattr(exc, "status_code", None) == 403
+
+
+def test_revoke_invalidates_token():
+    task_store.init()
+    with TestClient(app) as client:
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить revoke", "permissions": {"internet": False}})
+        task_id = response.json()["task"]["id"]
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
+        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click"})
+        approval_id = requested.json()["approval"]["id"]
+        token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant").json()["token"]
+        revoked = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/revoke")
+        assert revoked.status_code == 200
+        import asyncio
+        try:
+            asyncio.run(consume_approval(task_id, token, "browser.click"))
+            assert False, "revoked token was accepted"
+        except Exception as exc:
+            assert getattr(exc, "status_code", None) == 403
 
 
 def test_recovery_marks_interrupted_task():
     task_store.init()
     task_id = "recovery-test"
     task_store.delete(task_id)
-    task_store.save(
-        {
-            "id": task_id,
-            "created_at": "2026-01-01T00:00:00+00:00",
-            "updated_at": "2026-01-01T00:00:00+00:00",
-            "status": "RESEARCHING",
-            "stop_requested": False,
-            "journal": [],
-        }
-    )
-
+    task_store.save({"id": task_id, "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-01T00:00:00+00:00", "status": "RESEARCHING", "stop_requested": False, "journal": []})
     recovered = task_store.mark_recoverable()
     assert any(t["id"] == task_id for t in recovered)
     task = task_store.get(task_id)
-    assert task["status"] == "RECOVERABLE"
-    assert task["stop_requested"] is False
+    assert task["status"] == "RECOVERABLE" and task["stop_requested"] is False
     assert task["journal"][-1]["status"] == "recoverable"
