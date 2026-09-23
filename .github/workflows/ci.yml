@@ -27,4 +27,4 @@ jobs:
       - name: Run tests
         env:
           AKSI_TASK_DB: /tmp/aksi-ci.sqlite3
-        run: pytest -q
+        run: pytest -q tests
