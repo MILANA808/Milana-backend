@@ -125,10 +125,6 @@ async def world_search(body:WorldSearchRequest):
     return {"ok":True,"q":body.q,"text":"\n\n".join(x["text"] for x in results) if results else None,"sources":[x["source"]+(f" {x['url']}" if x.get('url') else "") for x in results],"results":results,"timestamp":datetime.now(timezone.utc).isoformat()}
 
 from app.core.aksi_field import run_field
-from app.api.opportunity import router as opportunity_router
-if opportunity_router not in app.router.routes:
-    app.include_router(opportunity_router)
-    ROUTERS.append("app.api.opportunity")
 
 class UniversalRequest(BaseModel):
     q:str
