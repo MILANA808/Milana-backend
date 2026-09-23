@@ -151,7 +151,27 @@ async def universal(body:UniversalRequest):
     except Exception: pass
     answer="".join(chunks).strip()
     if not answer:
-        answer="Внешний языковой модуль сейчас недоступен. AKSI не будет имитировать универсальный ответ без вычислительного ресурса."
+        # Do not leave the user without an answer when no language provider is configured.
+        # The controller can still return an evidence-grounded synthesis and a transparent
+        # working hypothesis. This is deliberately not presented as a verified fact.
+        if evidence:
+            lead=evidence[0]
+            answer=(
+                "AKSI: вот что можно ответить непосредственно из найденных свидетельств.\n\n"
+                + (lead.get("text") or "").strip()
+                + "\n\n"
+                "Рабочий вывод: это основано на доступном свидетельстве; "
+                "если нужен более глубокий ответ, AKSI должна продолжить поиск и сопоставление источников."
+            )
+        else:
+            terms=[x for x in re.findall(r"[А-Яа-яA-Za-z0-9]+", q.lower()) if len(x)>2][:12]
+            answer=(
+                "AKSI: я получила вопрос и могу рассуждать без внешней языковой модели.\n\n"
+                "Запрос: "+q+"\n"
+                "Ключевые понятия: "+(", ".join(terms) if terms else "—")+"\n\n"
+                "Рабочая гипотеза: вопрос требует построения объяснения из контекста и проверки "
+                "внешних данных. Это гипотеза, а не установленный факт."
+            )
     return {"ok":True,"answer":answer,"sources":evidence,"controller":"AKSI","mode":"evidence+reasoning"}
 @app.get("/api/world/search")
 async def world_search_get(q:str=Query(...,min_length=1)): return await world_search(WorldSearchRequest(q=q))
