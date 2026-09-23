@@ -133,7 +133,7 @@ async def model_analyze(t: Dict[str, Any]) -> str:
             "title": s.get("title", ""),
             "url": s.get("url", ""),
             "text": s.get("text", "") + ("\nBROWSER: " + s.get("browser_observation", "") if s.get("browser_observation") else ""),
-            "source": "web",
+            "source": (urlparse(s.get("url", "")).netloc or "web"),
         }
         for s in t["sources"]
     ]
