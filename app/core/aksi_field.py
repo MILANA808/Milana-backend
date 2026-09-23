@@ -54,11 +54,13 @@ class DynamicField:
             cs=[k.split("→",1)[1] for k,n in self.state.transitions.items() if k.startswith(self.last_tokens[-1]+"→") and n>0]
             predicted=max(cs,key=lambda x:self.state.transitions[self.last_tokens[-1]+"→"+x],default=None)
         actual=ts[0] if ts else None; error=0.0 if predicted is None or predicted==actual else 1.0
-        self._markov(ts); attractor=self._attractor(v) if self.memory else None; ops=self._select(ts,external_evidence,u)
+        ops=self._select(ts,external_evidence,u)
+        if "markov" in ops: self._markov(ts)
+        attractor=self._attractor(v) if ("attractor" in ops and self.memory) else None
         energy=min(1.0,0.55*(1-cosine(v,self.last_vector))+0.45*u) if self.last_vector else u
         stability=max(0.0,min(1.0,1-0.5*abs(energy-self.state.energy)-0.35*error))
         hist=(self.state.history+[{"step":self.state.step+1,"observation":observation[:240],"energy":round(energy,6),"prediction_error":error,"stability":round(stability,6),"operators":ops}])[-64:]
-        self.state=FieldState(self.state.step+1,round(energy,6),round(entropy(Counter(ts)),6),round(1-u,6),round(stability,6),round(error,6),self._spectrum(ts),ops,dict(self.state.attractors),dict(self.state.transitions),len(self.memory),hist)
+        self.state=FieldState(self.state.step+1,round(energy,6),round(entropy(Counter(ts)),6),round(1-u,6),round(stability,6),round(error,6),self._spectrum(ts) if "spectral" in ops else [0.0]*16,ops,dict(self.state.attractors),dict(self.state.transitions),len(self.memory),hist)
         key=attractor or hashlib.sha256(observation.encode()).hexdigest()[:12]; self.memory[key]={"observation":observation[:1000],"vector":v,"step":self.state.step}; self.last_vector,self.last_tokens=v,ts
         return self.snapshot()
     def counterfactual(self,actions):
