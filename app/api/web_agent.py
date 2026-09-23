@@ -13,7 +13,7 @@ from app.semantic_sampling import SemanticSampler, finalize as finalize_sampling
 
 router = APIRouter(prefix="/api/agent", tags=["AKSI Infinity Agent"])
 TASKS: Dict[str, Dict[str, Any]] = {}
-QUEUE: asyncio.Queue[str] = asyncio.Queue()
+QUEUE: asyncio.Queue[str] | None = None
 WORKER_TASK: asyncio.Task | None = None
 MAX_PAGE_CHARS = 18000
 MAX_BROWSER_STEPS = 12
@@ -182,24 +182,29 @@ async def execute(tid: str) -> None:
         persist_task(t)
 
 async def _worker() -> None:
+    if QUEUE is None: return
     while True:
         tid = await QUEUE.get()
         try: await execute(tid)
-        finally: QUEUE.task_done()
+        finally:
+            if QUEUE is not None: QUEUE.task_done()
 
 async def start_worker() -> None:
-    global WORKER_TASK
+    global WORKER_TASK, QUEUE
     if WORKER_TASK and not WORKER_TASK.done(): return
+    QUEUE = asyncio.Queue()
     recoverable = mark_recoverable()
     WORKER_TASK = asyncio.create_task(_worker(), name="aksi-infinity-worker")
     for t in recoverable: await QUEUE.put(t["id"])
 
 def stop_worker() -> None:
-    global WORKER_TASK
+    global WORKER_TASK, QUEUE
     if WORKER_TASK and not WORKER_TASK.done(): WORKER_TASK.cancel()
     WORKER_TASK = None
+    QUEUE = None
 
 async def enqueue(tid: str) -> None:
+    if QUEUE is None: raise RuntimeError("AKSI worker is not started")
     await QUEUE.put(tid)
 
 @router.post("/tasks")
