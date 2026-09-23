@@ -25,7 +25,7 @@ def optional_router(module, attr="router"):
         return None,False
 
 ROUTERS=[]
-for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core","app.api.opportunity"]:
+for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core"]:
     r,ok=optional_router(mod)
     if ok and r: app.include_router(r); ROUTERS.append(mod)
 # Opportunity Engine is a required public route; import it explicitly so CI/startup cannot silently hide failures.
@@ -125,6 +125,10 @@ async def world_search(body:WorldSearchRequest):
     return {"ok":True,"q":body.q,"text":"\n\n".join(x["text"] for x in results) if results else None,"sources":[x["source"]+(f" {x['url']}" if x.get('url') else "") for x in results],"results":results,"timestamp":datetime.now(timezone.utc).isoformat()}
 
 from app.core.aksi_field import run_field
+from app.api.opportunity import router as opportunity_router
+if opportunity_router not in app.router.routes:
+    app.include_router(opportunity_router)
+    ROUTERS.append("app.api.opportunity")
 
 class UniversalRequest(BaseModel):
     q:str
