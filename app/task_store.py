@@ -21,6 +21,7 @@ def _conn() -> sqlite3.Connection:
     return c
 
 def init() -> None:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with _conn() as c:
         c.execute("CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, status TEXT NOT NULL, payload TEXT NOT NULL)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at DESC)")
