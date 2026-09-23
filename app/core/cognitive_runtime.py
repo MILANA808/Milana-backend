@@ -1,121 +1,282 @@
-"""AKSI Cognitive Runtime v1 — mathematical arbitration around optional language models.
+"""AKSI Cognitive Runtime v2 — evidence-driven mathematical arbitration.
 
-The runtime does not claim to replace a neural language model. It provides the
-controller: routing, candidate generation, evidence scoring, contradiction
-checks, confidence calibration, and a durable structured result.
+Design:
+1) route the request;
+2) decompose complex work into explicit subgoals;
+3) collect independent public evidence when requested;
+4) generate multiple candidate answers through the model gateway;
+5) score candidates mathematically using query coverage, evidence support,
+   source diversity, agreement and contradiction penalties;
+6) return an auditable result with epistemic labels.
+
+The language model is a replaceable generator, not the authority.
 """
 from __future__ import annotations
-import ast, math, re
+
+import ast
+import math
+import re
+from collections import Counter
 from typing import Any, Dict, List
+from urllib.parse import urlparse
+
 
 def terms(text: str) -> List[str]:
-    return [x for x in re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", (text or "").lower()) if len(x) > 2][:40]
+    return [
+        x for x in re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", (text or "").lower())
+        if len(x) > 2
+    ][:80]
+
 
 def overlap(a: str, b: str) -> float:
-    A=set(terms(a)); B=set(terms(b))
-    return len(A&B)/max(1, len(A|B))
+    A, B = set(terms(a)), set(terms(b))
+    return len(A & B) / max(1, len(A | B))
+
 
 def safe_math(text: str):
-    s=(text or "").strip().replace(",", ".")
-    s=re.sub(r"(?i)(сколько|посчитай|вычисли|равно|чему равно)","",s).strip()
-    if not re.fullmatch(r"[0-9+*/().%\-\s^]+", s) or not re.search(r"[+*/%^]",s):
+    s = (text or "").strip().replace(",", ".")
+    s = re.sub(r"(?i)(сколько|посчитай|вычисли|равно|чему равно)", "", s).strip()
+    if not re.fullmatch(r"[0-9+*/().%\-\s^]+", s) or not re.search(r"[+*/%^]", s):
         return None
-    s=s.replace("^","**")
+    s = s.replace("^", "**")
     try:
-        node=ast.parse(s, mode="eval")
-        allowed=(ast.Expression,ast.Constant,ast.UnaryOp,ast.BinOp,ast.Add,ast.Sub,ast.Mult,ast.Div,
-                 ast.Pow,ast.Mod,ast.USub,ast.UAdd,ast.FloorDiv)
-        if any(type(n) not in allowed for n in ast.walk(node)): return None
-        if any(isinstance(n,ast.Constant) and (not isinstance(n.value,(int,float)) or isinstance(n.value,bool)) for n in ast.walk(node)): return None
-        v=eval(compile(node,"<aksi-math>","eval"),{"__builtins__":{}},{})
-        return v if isinstance(v,(int,float)) and math.isfinite(v) else None
+        node = ast.parse(s, mode="eval")
+        allowed = (
+            ast.Expression, ast.Constant, ast.UnaryOp, ast.BinOp, ast.Add,
+            ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.USub,
+            ast.UAdd, ast.FloorDiv,
+        )
+        if any(type(n) not in allowed for n in ast.walk(node)):
+            return None
+        if any(
+            isinstance(n, ast.Constant)
+            and (not isinstance(n.value, (int, float)) or isinstance(n.value, bool))
+            for n in ast.walk(node)
+        ):
+            return None
+        value = eval(compile(node, "<aksi-math>", "eval"), {"__builtins__": {}}, {})
+        return value if isinstance(value, (int, float)) and math.isfinite(value) else None
     except Exception:
         return None
 
-def route(q: str) -> Dict[str,Any]:
-    n=(q or "").lower()
-    if safe_math(q) is not None: return {"type":"calculation","needs_web":False}
-    if re.search(r"\b(кто|что|где|когда|почему|как|какой|какая|какие|сколько|зачем|может ли|правда ли)\b",n):
-        return {"type":"question","needs_web":True}
-    if re.search(r"\b(сравни|план|придумай|спроектируй|напиши|объясни|помоги|идея|стратег)",n):
-        return {"type":"reasoning","needs_web":False}
-    return {"type":"general","needs_web":False}
 
-def score_candidate(text: str, q: str, evidence: List[Dict[str,Any]], role: str) -> float:
-    if not text: return 0.0
-    ev=max([overlap(text, x.get("text","")) for x in evidence] or [0.0])
-    qov=overlap(text,q)
-    penalties=0.0
-    if re.search(r"https?://|источник:", text, re.I) and not evidence: penalties += .15
-    if re.search(r"точно|гарантированно|безусловно",text,re.I) and not evidence: penalties += .12
-    role_bonus=.05 if role=="direct" else .03
-    return max(0.0,min(1.0,.48*qov+.47*ev+role_bonus-penalties))
+def route(q: str) -> Dict[str, Any]:
+    n = (q or "").lower()
+    if safe_math(q) is not None:
+        return {"type": "calculation", "needs_web": False, "complexity": 0}
+    if re.search(r"\b(сравни|сравнение|план|спроектируй|исследуй|изучи|найди|проверь|стратег|анализ)\b", n):
+        return {"type": "research_reasoning", "needs_web": True, "complexity": 2}
+    if re.search(r"\b(кто|что|где|когда|почему|как|какой|какая|какие|сколько|зачем|может ли|правда ли)\b", n):
+        return {"type": "question", "needs_web": True, "complexity": 1}
+    if re.search(r"\b(придумай|напиши|объясни|помоги|идея|создай|спроектируй)\b", n):
+        return {"type": "reasoning", "needs_web": False, "complexity": 1}
+    return {"type": "general", "needs_web": False, "complexity": 1}
 
-def contradictions(text: str, evidence: List[Dict[str,Any]]) -> List[str]:
-    out=[]
-    neg=re.search(r"\bне\b|невозмож|ложн",text.lower()) is not None
-    for e in evidence:
-        et=e.get("text","")
-        en=re.search(r"\bне\b|невозмож|ложн",et.lower()) is not None
-        if neg != en and overlap(text,et)>.28:
-            out.append(e.get("title") or e.get("source") or "evidence")
-    return out[:5]
 
-async def run(q: str, evidence: List[Dict[str,Any]], history: List[Dict[str,Any]]|None=None) -> Dict[str,Any]:
-    history=history or []
-    rt=route(q)
-    calc=safe_math(q)
-    if calc is not None:
-        return {"answer":f"Результат: {calc}","route":rt,"candidates":[{"role":"calculator","score":1.0,"text":f"Результат: {calc}"}],"selected":"calculator","confidence":1.0,"contradictions":[]}
-    context="\n\n".join(
-        f"SOURCE: {x.get('source','')}\nTITLE: {x.get('title','')}\nURL: {x.get('url','')}\nTEXT: {x.get('text','')[:3500]}"
-        for x in evidence[:8]
+def decompose(q: str, rt: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if rt["type"] == "calculation":
+        return [{"id": "calc", "goal": q, "kind": "compute"}]
+    if rt["type"] == "research_reasoning":
+        return [
+            {"id": "scope", "goal": f"Определи предмет и критерии для: {q}", "kind": "scope"},
+            {"id": "evidence", "goal": f"Найди проверяемые свидетельства по: {q}", "kind": "evidence"},
+            {"id": "synthesis", "goal": f"Синтезируй вывод по: {q}", "kind": "synthesis"},
+        ]
+    if rt["needs_web"]:
+        return [{"id": "fact", "goal": q, "kind": "fact"}]
+    return [{"id": "answer", "goal": q, "kind": "answer"}]
+
+
+def source_domains(evidence: List[Dict[str, Any]]) -> set[str]:
+    out = set()
+    for item in evidence:
+        try:
+            host = (urlparse(item.get("url", "")).netloc or "").lower()
+            if host:
+                out.add(host)
+        except Exception:
+            pass
+    return out
+
+
+def contradiction_pairs(text: str, evidence: List[Dict[str, Any]]) -> List[str]:
+    out = []
+    neg_words = re.compile(r"\b(не|нет|невозможно|ложн|false|not)\b", re.I)
+    target_neg = bool(neg_words.search(text or ""))
+    for item in evidence:
+        et = item.get("text", "")
+        if overlap(text, et) < 0.20:
+            continue
+        if bool(neg_words.search(et)) != target_neg:
+            out.append(item.get("title") or item.get("source") or "evidence")
+    return out[:8]
+
+
+def candidate_score(
+    text: str,
+    q: str,
+    evidence: List[Dict[str, Any]],
+    role: str,
+    all_candidates: List[str],
+) -> Dict[str, float]:
+    if not text:
+        return {"total": 0.0, "query": 0.0, "evidence": 0.0, "agreement": 0.0, "diversity": 0.0}
+    q_score = overlap(text, q)
+    ev_scores = [overlap(text, x.get("text", "")) for x in evidence]
+    ev_score = max(ev_scores or [0.0])
+    agreement = (
+        sum(overlap(text, other) for other in all_candidates if other and other != text)
+        / max(1, len([other for other in all_candidates if other and other != text]))
     )
-    base=(
+    diversity = min(1.0, len(source_domains(evidence)) / 3.0)
+    penalty = 0.0
+    if re.search(r"точно|гарантированно|безусловно", text, re.I) and not evidence:
+        penalty += 0.12
+    contradictions = contradiction_pairs(text, evidence)
+    penalty += min(0.36, 0.12 * len(contradictions))
+    role_bonus = {"direct": 0.05, "analytical": 0.04, "evidence": 0.02}.get(role, 0.0)
+    total = max(
+        0.0,
+        min(
+            1.0,
+            0.34 * q_score
+            + 0.34 * ev_score
+            + 0.20 * agreement
+            + 0.07 * diversity
+            + role_bonus
+            - penalty,
+        ),
+    )
+    return {
+        "total": round(total, 4),
+        "query": round(q_score, 4),
+        "evidence": round(ev_score, 4),
+        "agreement": round(agreement, 4),
+        "diversity": round(diversity, 4),
+    }
+
+
+async def generate_candidates(
+    q: str,
+    evidence: List[Dict[str, Any]],
+    history: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    context = "\n\n".join(
+        f"SOURCE: {x.get('source', '')}\nTITLE: {x.get('title', '')}\n"
+        f"URL: {x.get('url', '')}\nTEXT: {x.get('text', '')[:4000]}"
+        for x in evidence[:10]
+    )
+    base = (
         "Ты языковой модуль внутри AKSI Cognitive Runtime. "
         "Ответь непосредственно на запрос. Не выдумывай конкретные факты. "
-        "Если вопрос требует актуальных данных, используй только данные из EVIDENCE и отделяй факт от вывода. "
-        "Если запрос творческий, гипотетический, планировочный или объяснительный — отвечай полноценно, не заменяй ответ фразой о нехватке свидетельств. "
-        "Не раскрывай внутренние рассуждения; дай только краткие основания и итог. "
-        "Запрос:\n"+q+"\n\nEVIDENCE:\n"+(context or "нет внешних свидетельств")
+        "Актуальные факты опирай на EVIDENCE. Творческие и планировочные запросы "
+        "отвечай полноценно, не заменяй ответ фразой о нехватке свидетельств. "
+        "Разделяй факт, вывод и гипотезу. Не раскрывай внутренние рассуждения.\n"
+        f"ЗАПРОС:\n{q}\n\nEVIDENCE:\n{context or 'нет внешних свидетельств'}"
     )
-    candidates=[]
+    prompts = [
+        ("direct", base + "\nРЕЖИМ: direct. Дай ясный итог и краткие основания."),
+        ("analytical", base + "\nРЕЖИМ: analytical. Проверь альтернативы, противоречия и ограничения."),
+    ]
+    candidates = []
     try:
         from app.core.llm import generate
-        prompts=[
-            base+"\nРЕЖИМ: direct. Сначала дай ясный ответ, затем 2-4 кратких основания.",
-            base+"\nРЕЖИМ: analytical. Построй независимое объяснение, явно разделив факт, вывод и предположение."
-        ]
-        for i,p in enumerate(prompts):
-            out=[]
-            async for chunk in generate(p,session_id="cognitive",history=history[-8:]):
-                out.append(chunk)
-            txt="".join(out).strip()
-            if txt:
-                role="direct" if i==0 else "analytical"
-                candidates.append({"role":role,"text":txt,"score":score_candidate(txt,q,evidence,role)})
+        for role, prompt in prompts:
+            chunks = []
+            async for chunk in generate(prompt, session_id="cognitive", history=history[-8:]):
+                chunks.append(chunk)
+            text = "".join(chunks).strip()
+            if text:
+                candidates.append({"role": role, "text": text})
     except Exception:
         pass
+    return candidates
+
+
+async def run(
+    q: str,
+    evidence: List[Dict[str, Any]],
+    history: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    history = history or []
+    rt = route(q)
+    plan = decompose(q, rt)
+    calc = safe_math(q)
+
+    if calc is not None:
+        text = f"Результат: {calc}"
+        return {
+            "answer": text,
+            "route": rt,
+            "plan": plan,
+            "candidates": [{"role": "calculator", "score": 1.0, "text": text}],
+            "selected": "calculator",
+            "confidence": 1.0,
+            "contradictions": [],
+            "epistemic": "fact",
+            "evidence_count": len(evidence),
+        }
+
+    candidates = await generate_candidates(q, evidence, history)
+
     if evidence:
-        lead=evidence[0]
-        candidates.append({"role":"evidence","text":lead.get("text","").strip(),"score":score_candidate(lead.get("text",""),q,evidence,"evidence")})
+        lead = evidence[0]
+        candidates.append({
+            "role": "evidence",
+            "text": lead.get("text", "").strip(),
+        })
+
     if not candidates:
-        ts=terms(q)
-        local=(f"Рабочая модель AKSI для запроса «{q}»: ключевые понятия — {', '.join(ts) if ts else 'не выделены'}. "
-               "Это структурированная гипотеза, а не установленный внешний факт.")
-        candidates.append({"role":"local","text":local,"score":.18})
+        labels = "факт/вывод/гипотеза"
+        text = (
+            f"AKSI обработала запрос «{q}», но генератор ответа сейчас недоступен. "
+            f"Доступна структурированная постановка задачи: {labels}; "
+            "внешний факт без источника не утверждается."
+        )
+        candidates.append({"role": "local", "text": text})
+
+    texts = [c["text"] for c in candidates]
     for c in candidates:
-        c["contradictions"]=contradictions(c["text"],evidence)
-        c["score"]=max(0,c["score"]-.12*len(c["contradictions"]))
-    candidates.sort(key=lambda x:x["score"],reverse=True)
-    selected=candidates[0]
-    conf=min(.97,max(.05,selected["score"]*(1.0 if not selected["contradictions"] else .72)))
+        metrics = candidate_score(c["text"], q, evidence, c["role"], texts)
+        c["score"] = metrics["total"]
+        c["score_breakdown"] = metrics
+        c["contradictions"] = contradiction_pairs(c["text"], evidence)
+
+    candidates.sort(key=lambda x: x["score"], reverse=True)
+    selected = candidates[0]
+    confidence = selected["score"]
+    if len(candidates) > 1:
+        margin = max(0.0, selected["score"] - candidates[1]["score"])
+        confidence = min(0.97, confidence + 0.20 * margin)
+    if selected["contradictions"]:
+        confidence *= 0.72
+    if rt["type"] in {"reasoning", "general"} and not evidence:
+        confidence = min(confidence, 0.82)
+
+    if evidence:
+        epistemic = "fact+inference"
+    elif rt["type"] in {"reasoning", "general"}:
+        epistemic = "inference/plan"
+    else:
+        epistemic = "model_answer"
+
     return {
-        "answer":selected["text"],
-        "route":rt,
-        "candidates":[{k:c[k] for k in ("role","score","contradictions")} for c in candidates],
-        "selected":selected["role"],
-        "confidence":round(conf,3),
-        "contradictions":selected["contradictions"],
-        "evidence_count":len(evidence)
+        "answer": selected["text"],
+        "route": rt,
+        "plan": plan,
+        "candidates": [
+            {
+                "role": c["role"],
+                "score": round(c["score"], 4),
+                "score_breakdown": c["score_breakdown"],
+                "contradictions": c["contradictions"],
+            }
+            for c in candidates
+        ],
+        "selected": selected["role"],
+        "confidence": round(max(0.05, min(0.97, confidence)), 3),
+        "contradictions": selected["contradictions"],
+        "epistemic": epistemic,
+        "evidence_count": len(evidence),
+        "source_domains": sorted(source_domains(evidence)),
     }
