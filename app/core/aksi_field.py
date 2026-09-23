@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib, math, re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 TOKEN_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9]+")
 def tokens(text: str) -> List[str]: return [x.lower() for x in TOKEN_RE.findall(text or "") if len(x)>1][:96]
 def hvec(token: str, dim: int=64) -> Tuple[float,...]:
@@ -69,6 +69,18 @@ class DynamicField:
         return sorted(out,key=lambda x:x["score"],reverse=True)
     def snapshot(self):
         s=self.state; return {"step":s.step,"state_vector":"X=(V,M,E,F,H,P,C,Sigma)","energy":s.energy,"entropy":s.entropy,"confidence":s.confidence,"stability":s.stability,"prediction_error":s.prediction_error,"spectrum":s.spectrum,"active_operators":s.active_operators,"attractor_count":len(s.attractors),"transition_count":len(s.transitions),"memory_size":len(self.memory),"history":s.history[-12:]}
-def run_field(observation,evidence=None,confidence=None):
-    f=DynamicField(); result=f.step(observation,external_evidence=len(evidence or []),confidence=confidence)
-    return {"field":result,"counterfactuals":f.counterfactual(["continue current trajectory","seek more evidence","switch strategy"])}
+_SESSIONS: Dict[str, DynamicField] = {}
+_MAX_SESSIONS = 128
+
+def get_field(session_id: Optional[str] = None) -> tuple[str, DynamicField]:
+    sid = session_id or hashlib.sha256(str(len(_SESSIONS)).encode()).hexdigest()[:16]
+    if sid not in _SESSIONS:
+        if len(_SESSIONS) >= _MAX_SESSIONS:
+            _SESSIONS.pop(next(iter(_SESSIONS)))
+        _SESSIONS[sid] = DynamicField()
+    return sid, _SESSIONS[sid]
+
+def run_field(observation,evidence=None,confidence=None,session_id=None):
+    sid, f = get_field(session_id)
+    result=f.step(observation,external_evidence=len(evidence or []),confidence=confidence)
+    return {"session_id":sid,"field":result,"counterfactuals":f.counterfactual(["continue current trajectory","seek more evidence","switch strategy"])}
