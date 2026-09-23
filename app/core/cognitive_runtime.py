@@ -39,6 +39,8 @@ def safe_math(text: str):
     if not re.fullmatch(r"[0-9+*/().%\-\s^]+", s) or not re.search(r"[+*/%^]", s):
         return None
     s = s.replace("^", "**")
+    if len(s) > 160 or re.search(r"\d{16,}", s):
+        return None
     try:
         node = ast.parse(s, mode="eval")
         allowed = (
