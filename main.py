@@ -175,7 +175,8 @@ async def universal(body:UniversalRequest):
         "evidence_count":result.get("evidence_count",len(evidence))
     }
 @app.get("/api/world/search")
-async def world_search_get(q:str=Query(...,min_length=1)): return await world_search(WorldSearchRequest(q=q))
+async def world_search_get(q:str=Query(...,min_length=1), include_arxiv:bool=False):
+    return await world_search(WorldSearchRequest(q=q, include_arxiv=include_arxiv))
 @app.post("/echo")
 async def echo(request:EchoRequest): return {"echo":request.message,"timestamp":datetime.now(timezone.utc).isoformat(),"length":len(request.message)}
 @app.get("/aksi/metrics")
