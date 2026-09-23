@@ -28,7 +28,7 @@ ROUTERS=[]
 for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core","app.api.opportunity"]:
     r,ok=optional_router(mod)
     if ok and r: app.include_router(r); ROUTERS.append(mod)
-
+# Opportunity Engine is a required public route; import it explicitly so CI/startup cannot silently hide failures.\nfrom app.api.opportunity import router as opportunity_router\nif "app.api.opportunity" not in ROUTERS:\n    app.include_router(opportunity_router); ROUTERS.append("app.api.opportunity")\n
 try:
     from app.middleware.aksi_seal import AksiSealMiddleware
     app.add_middleware(AksiSealMiddleware); SEAL_MIDDLEWARE=True
