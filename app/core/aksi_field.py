@@ -74,13 +74,14 @@ class DynamicField:
 _SESSIONS: Dict[str, DynamicField] = {}
 _MAX_SESSIONS = 128
 
-def get_field(session_id: Optional[str] = None) -> tuple[str, DynamicField]:
-    sid = session_id or hashlib.sha256(str(len(_SESSIONS)).encode()).hexdigest()[:16]
-    if sid not in _SESSIONS:
+def get_field(session_id: Optional[str] = None) -> tuple[Optional[str], DynamicField]:
+    if not session_id:
+        return None, DynamicField()
+    if session_id not in _SESSIONS:
         if len(_SESSIONS) >= _MAX_SESSIONS:
             _SESSIONS.pop(next(iter(_SESSIONS)))
-        _SESSIONS[sid] = DynamicField()
-    return sid, _SESSIONS[sid]
+        _SESSIONS[session_id] = DynamicField()
+    return session_id, _SESSIONS[session_id]
 
 def run_field(observation,evidence=None,confidence=None,session_id=None):
     sid, f = get_field(session_id)
