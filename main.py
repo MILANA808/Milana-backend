@@ -129,7 +129,6 @@ class UniversalRequest(BaseModel):
 async def universal(body:UniversalRequest):
     q=body.q.strip()
     if not q: raise HTTPException(400,"q required")
-    # AKSI is the controller; an external model is only a replaceable language generator.
     evidence=[]
     if body.web:
         w=await wiki_search(q)
@@ -137,42 +136,26 @@ async def universal(body:UniversalRequest):
         if re.search(r"науч|исслед|теор|физик|математ|algorithm|neural|arxiv|квант",q,re.I):
             a=await arxiv_search(q)
             if a: evidence.append(a)
-    ev="\n\n".join(f"SOURCE: {x.get('source')}\\nTITLE: {x.get('title','')}\\nURL: {x.get('url','')}\\nTEXT: {x.get('text','')}" for x in evidence)
-    prompt=("Ответь на вопрос пользователя. Ты языковой модуль АКСИ, но не являешься источником истины. "
-            "Сначала используй приведённые свидетельства, если они релевантны. Отделяй известное от вывода и от предположения. "
-            "Если свидетельств недостаточно, всё равно дай полезный ответ на основе рассуждения и явно обозначь, что является выводом. "
-            "Не говори 'недостаточно свидетельств' вместо ответа, если можно построить разумное объяснение. "
-            "Не выдумывай конкретные факты, даты, цитаты или источники. Если вопрос творческий, гипотетический или требует мнения — отвечай непосредственно, обозначая рамку. "
-            "В конце кратко укажи ограничения ответа.\\n\\nВОПРОС:\\n"+q+"\\n\\nСВИДЕТЕЛЬСТВА:\\n"+(ev or "нет внешних свидетельств"))
-    chunks=[]
+    # The mathematical controller now arbitrates multiple answer candidates.
+    # A language model is a replaceable generator, never the authority.
     try:
-        from app.core.llm import generate
-        async for chunk in generate(prompt,session_id="universal",history=body.history): chunks.append(chunk)
-    except Exception: pass
-    answer="".join(chunks).strip()
-    if not answer:
-        # Do not leave the user without an answer when no language provider is configured.
-        # The controller can still return an evidence-grounded synthesis and a transparent
-        # working hypothesis. This is deliberately not presented as a verified fact.
-        if evidence:
-            lead=evidence[0]
-            answer=(
-                "AKSI: вот что можно ответить непосредственно из найденных свидетельств.\n\n"
-                + (lead.get("text") or "").strip()
-                + "\n\n"
-                "Рабочий вывод: это основано на доступном свидетельстве; "
-                "если нужен более глубокий ответ, AKSI должна продолжить поиск и сопоставление источников."
-            )
-        else:
-            terms=[x for x in re.findall(r"[А-Яа-яA-Za-z0-9]+", q.lower()) if len(x)>2][:12]
-            answer=(
-                "AKSI: я получила вопрос и могу рассуждать без внешней языковой модели.\n\n"
-                "Запрос: "+q+"\n"
-                "Ключевые понятия: "+(", ".join(terms) if terms else "—")+"\n\n"
-                "Рабочая гипотеза: вопрос требует построения объяснения из контекста и проверки "
-                "внешних данных. Это гипотеза, а не установленный факт."
-            )
-    return {"ok":True,"answer":answer,"sources":evidence,"controller":"AKSI","mode":"evidence+reasoning"}
+        from app.core.cognitive_runtime import run as cognitive_run
+        result=await cognitive_run(q,evidence,body.history)
+    except Exception as exc:
+        result={"answer":"AKSI runtime error: "+type(exc).__name__,"route":{"type":"error"},"candidates":[],"selected":"error","confidence":0.0,"contradictions":[]}
+    return {
+        "ok":True,
+        "answer":result["answer"],
+        "sources":evidence,
+        "controller":"AKSI Cognitive Runtime",
+        "mode":"route→evidence→candidates→mathematical arbitration",
+        "route":result.get("route",{}),
+        "candidates":result.get("candidates",[]),
+        "selected":result.get("selected"),
+        "confidence":result.get("confidence"),
+        "contradictions":result.get("contradictions",[]),
+        "evidence_count":result.get("evidence_count",len(evidence))
+    }
 @app.get("/api/world/search")
 async def world_search_get(q:str=Query(...,min_length=1)): return await world_search(WorldSearchRequest(q=q))
 @app.post("/echo")
