@@ -28,3 +28,7 @@ jobs:
         env:
           AKSI_TASK_DB: /tmp/aksi-ci.sqlite3
         run: PYTHONPATH=. pytest -q tests
+      - name: Import application
+        env:
+          AKSI_TASK_DB: /tmp/aksi-ci-import.sqlite3
+        run: python -c "import main; print(main.VERSION); print(main.ROUTERS)"

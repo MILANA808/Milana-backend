@@ -48,7 +48,9 @@ async def create_browser_session(body:BrowserCreate):
     return {"ok":True,"session_id":sid,"status":"READY","capabilities":["navigate","click","type","read","screenshot"],"task_id":body.task_id}
 @router.post("/sessions/{session_id}/navigate")
 async def navigate(session_id:str,body:NavigateRequest):
-    session=await _session(session_id); page:Page=session["page"]; await page.goto(_safe_public_url(body.url),wait_until="domcontentloaded",timeout=30000); return {"ok":True,"url":page.url,"title":await page.title()}
+    session=await _session(session_id); page:Page=session["page"]; await page.goto(_safe_public_url(body.url),wait_until="domcontentloaded",timeout=30000)
+    _safe_public_url(page.url)
+    return {"ok":True,"url":page.url,"title":await page.title()}
 @router.post("/sessions/{session_id}/click")
 async def click(session_id:str,body:ClickRequest):
     session=await _session(session_id); await consume_approval(session["task_id"],body.approval_token,"browser.click"); page:Page=session["page"]; await page.locator(body.selector).first.click(timeout=15000); return {"ok":True,"url":page.url,"title":await page.title()}

@@ -11,7 +11,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 CODEX = {"version":"1.0","title":"Кодекс Суверенного ИИ АКСИ","rules":["Не выдумывать факты; указывать источники","Признавать неуверенность","Не выполнять вредоносные действия","Identity (DID) — ответственность, не маркетинг"],"url":"https://milana808.github.io/CODEX.md"}
 BLOCK_PATTERNS = [(re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)",re.I),"вред"),(re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)",re.I),"harm")]
 app = FastAPI(title="Milana-backend (AKSI)", description="AKSI Core · sovereign AI · Infinity · browser · evidence · receipt", version=VERSION)
@@ -25,9 +25,13 @@ def optional_router(module, attr="router"):
         return None,False
 
 ROUTERS=[]
-for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core","app.api.opportunity"]:
+for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core"]:
     r,ok=optional_router(mod)
     if ok and r: app.include_router(r); ROUTERS.append(mod)
+# Opportunity Engine is a required public route; import it explicitly so CI/startup cannot silently hide failures.
+from app.api.opportunity import router as opportunity_router
+if "app.api.opportunity" not in ROUTERS:
+    app.include_router(opportunity_router); ROUTERS.append("app.api.opportunity")
 
 try:
     from app.middleware.aksi_seal import AksiSealMiddleware
@@ -120,10 +124,13 @@ async def world_search(body:WorldSearchRequest):
         if a: results.append(a)
     return {"ok":True,"q":body.q,"text":"\n\n".join(x["text"] for x in results) if results else None,"sources":[x["source"]+(f" {x['url']}" if x.get('url') else "") for x in results],"results":results,"timestamp":datetime.now(timezone.utc).isoformat()}
 
+from app.core.aksi_field import run_field
+
 class UniversalRequest(BaseModel):
     q:str
     history:List[Dict[str,Any]]=Field(default_factory=list)
     web:bool=True
+    session_id:Optional[str]=None
 
 @app.post("/api/cognition")
 async def cognition(body:UniversalRequest):
@@ -148,9 +155,12 @@ async def universal(body:UniversalRequest):
         result=await cognitive_run(q,evidence,body.history)
     except Exception as exc:
         result={"answer":"AKSI runtime error: "+type(exc).__name__,"route":{"type":"error"},"candidates":[],"selected":"error","confidence":0.0,"contradictions":[]}
+    field_result=run_field(q,evidence,result.get("confidence"),body.session_id)
     return {
         "ok":True,
         "answer":result["answer"],
+        "field":field_result["field"],
+        "counterfactuals":field_result["counterfactuals"],
         "sources":evidence,
         "controller":"AKSI Cognitive Runtime",
         "mode":"route→evidence→candidates→mathematical arbitration",
@@ -165,7 +175,8 @@ async def universal(body:UniversalRequest):
         "evidence_count":result.get("evidence_count",len(evidence))
     }
 @app.get("/api/world/search")
-async def world_search_get(q:str=Query(...,min_length=1)): return await world_search(WorldSearchRequest(q=q))
+async def world_search_get(q:str=Query(...,min_length=1), include_arxiv:bool=False):
+    return await world_search(WorldSearchRequest(q=q, include_arxiv=include_arxiv))
 @app.post("/echo")
 async def echo(request:EchoRequest): return {"echo":request.message,"timestamp":datetime.now(timezone.utc).isoformat(),"length":len(request.message)}
 @app.get("/aksi/metrics")
