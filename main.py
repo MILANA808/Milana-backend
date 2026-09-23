@@ -11,7 +11,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-VERSION = "0.10.0"
+VERSION = "0.11.0"
 CODEX = {"version":"1.0","title":"Кодекс Суверенного ИИ АКСИ","rules":["Не выдумывать факты; указывать источники","Признавать неуверенность","Не выполнять вредоносные действия","Identity (DID) — ответственность, не маркетинг"],"url":"https://milana808.github.io/CODEX.md"}
 BLOCK_PATTERNS = [(re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)",re.I),"вред"),(re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)",re.I),"harm")]
 app = FastAPI(title="Milana-backend (AKSI)", description="AKSI Core · sovereign AI · Infinity · browser · evidence · receipt", version=VERSION)
@@ -120,6 +120,8 @@ async def world_search(body:WorldSearchRequest):
         if a: results.append(a)
     return {"ok":True,"q":body.q,"text":"\n\n".join(x["text"] for x in results) if results else None,"sources":[x["source"]+(f" {x['url']}" if x.get('url') else "") for x in results],"results":results,"timestamp":datetime.now(timezone.utc).isoformat()}
 
+from app.core.aksi_field import run_field
+
 class UniversalRequest(BaseModel):
     q:str
     history:List[Dict[str,Any]]=Field(default_factory=list)
@@ -148,9 +150,12 @@ async def universal(body:UniversalRequest):
         result=await cognitive_run(q,evidence,body.history)
     except Exception as exc:
         result={"answer":"AKSI runtime error: "+type(exc).__name__,"route":{"type":"error"},"candidates":[],"selected":"error","confidence":0.0,"contradictions":[]}
+    field_result=run_field(q,evidence,result.get("confidence"))
     return {
         "ok":True,
         "answer":result["answer"],
+        "field":field_result["field"],
+        "counterfactuals":field_result["counterfactuals"],
         "sources":evidence,
         "controller":"AKSI Cognitive Runtime",
         "mode":"route→evidence→candidates→mathematical arbitration",
