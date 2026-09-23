@@ -17,3 +17,20 @@ def test_prediction_error_and_stability_are_exposed():
 def test_counterfactuals_are_bounded():
     f=DynamicField(); f.step('state'); xs=f.counterfactual(['a','b','c','d','e','f','g','h','i'])
     assert len(xs)==8
+
+def test_session_persists_trajectory():
+    from app.core.aksi_field import run_field
+    sid="test-persistent-field"
+    a=run_field("alpha beta",session_id=sid)
+    b=run_field("beta gamma",session_id=sid)
+    assert b["session_id"] == sid
+    assert b["field"]["step"] == a["field"]["step"] + 1
+    assert b["field"]["memory_size"] >= a["field"]["memory_size"]
+
+def test_benchmark_has_dynamic_and_fixed_baselines():
+    from benchmarks.aksi_field_benchmark import benchmark
+    result=benchmark()
+    assert set(result) == {"stable","regime_switch","noisy"}
+    for case in result.values():
+        assert set(case) == {"dynamic","fixed"}
+        assert case["dynamic"]["operator_count"] <= case["fixed"]["operator_count"]
