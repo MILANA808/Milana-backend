@@ -125,6 +125,11 @@ class UniversalRequest(BaseModel):
     history:List[Dict[str,Any]]=Field(default_factory=list)
     web:bool=True
 
+@app.post("/api/cognition")
+async def cognition(body:UniversalRequest):
+    """Single-shot cognitive loop: route → evidence → candidates → arbitration."""
+    return await universal(body)
+
 @app.post("/api/universal")
 async def universal(body:UniversalRequest):
     q=body.q.strip()
@@ -154,6 +159,9 @@ async def universal(body:UniversalRequest):
         "selected":result.get("selected"),
         "confidence":result.get("confidence"),
         "contradictions":result.get("contradictions",[]),
+        "epistemic":result.get("epistemic"),
+        "plan":result.get("plan",[]),
+        "source_domains":result.get("source_domains",[]),
         "evidence_count":result.get("evidence_count",len(evidence))
     }
 @app.get("/api/world/search")
