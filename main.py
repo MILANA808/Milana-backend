@@ -119,6 +119,40 @@ async def world_search(body:WorldSearchRequest):
         a=await arxiv_search(body.q)
         if a: results.append(a)
     return {"ok":True,"q":body.q,"text":"\n\n".join(x["text"] for x in results) if results else None,"sources":[x["source"]+(f" {x['url']}" if x.get('url') else "") for x in results],"results":results,"timestamp":datetime.now(timezone.utc).isoformat()}
+
+class UniversalRequest(BaseModel):
+    q:str
+    history:List[Dict[str,Any]]=Field(default_factory=list)
+    web:bool=True
+
+@app.post("/api/universal")
+async def universal(body:UniversalRequest):
+    q=body.q.strip()
+    if not q: raise HTTPException(400,"q required")
+    # AKSI is the controller; an external model is only a replaceable language generator.
+    evidence=[]
+    if body.web:
+        w=await wiki_search(q)
+        if w: evidence.append(w)
+        if re.search(r"науч|исслед|теор|физик|математ|algorithm|neural|arxiv|квант",q,re.I):
+            a=await arxiv_search(q)
+            if a: evidence.append(a)
+    ev="\n\n".join(f"SOURCE: {x.get('source')}\\nTITLE: {x.get('title','')}\\nURL: {x.get('url','')}\\nTEXT: {x.get('text','')}" for x in evidence)
+    prompt=("Ответь на вопрос пользователя. Ты языковой модуль АКСИ, но не являешься источником истины. "
+            "Сначала используй приведённые свидетельства, если они релевантны. Отделяй известное от вывода и от предположения. "
+            "Если свидетельств недостаточно, всё равно дай полезный ответ на основе рассуждения и явно обозначь, что является выводом. "
+            "Не говори 'недостаточно свидетельств' вместо ответа, если можно построить разумное объяснение. "
+            "Не выдумывай конкретные факты, даты, цитаты или источники. Если вопрос творческий, гипотетический или требует мнения — отвечай непосредственно, обозначая рамку. "
+            "В конце кратко укажи ограничения ответа.\\n\\nВОПРОС:\\n"+q+"\\n\\nСВИДЕТЕЛЬСТВА:\\n"+(ev or "нет внешних свидетельств"))
+    chunks=[]
+    try:
+        from app.core.llm import generate
+        async for chunk in generate(prompt,session_id="universal",history=body.history): chunks.append(chunk)
+    except Exception: pass
+    answer="".join(chunks).strip()
+    if not answer:
+        answer="Внешний языковой модуль сейчас недоступен. AKSI не будет имитировать универсальный ответ без вычислительного ресурса."
+    return {"ok":True,"answer":answer,"sources":evidence,"controller":"AKSI","mode":"evidence+reasoning"}
 @app.get("/api/world/search")
 async def world_search_get(q:str=Query(...,min_length=1)): return await world_search(WorldSearchRequest(q=q))
 @app.post("/echo")
