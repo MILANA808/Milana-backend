@@ -126,6 +126,7 @@ class UniversalRequest(BaseModel):
     q:str
     history:List[Dict[str,Any]]=Field(default_factory=list)
     web:bool=True
+    session_id:Optional[str]=None
 
 @app.post("/api/cognition")
 async def cognition(body:UniversalRequest):
@@ -150,7 +151,7 @@ async def universal(body:UniversalRequest):
         result=await cognitive_run(q,evidence,body.history)
     except Exception as exc:
         result={"answer":"AKSI runtime error: "+type(exc).__name__,"route":{"type":"error"},"candidates":[],"selected":"error","confidence":0.0,"contradictions":[]}
-    field_result=run_field(q,evidence,result.get("confidence"))
+    field_result=run_field(q,evidence,result.get("confidence"),body.session_id)
     return {
         "ok":True,
         "answer":result["answer"],
