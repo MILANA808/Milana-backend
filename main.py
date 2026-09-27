@@ -29,6 +29,92 @@ for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.
     r,ok=optional_router(mod)
     if ok and r: app.include_router(r); ROUTERS.append(mod)
 
+# Compatibility fallback: keep the public Opportunity Engine route available even if
+# an optional router import is temporarily unavailable. The endpoint remains
+# model-independent and is intentionally small/observable.
+if not any(getattr(r, "path", "") == "/api/opportunity/discover" for r in app.routes):
+    class OpportunityFallbackRequest(BaseModel):
+        goal: str = Field(min_length=3, max_length=4000)
+        market: str = Field(default="", max_length=300)
+        keywords: List[str] = Field(default_factory=list, max_length=20)
+        max_queries: int = Field(default=6, ge=1, le=12)
+        max_results: int = Field(default=30, ge=1, le=100)
+
+    @app.post("/api/opportunity/discover", tags=["AKSI Opportunity Engine"])
+    async def opportunity_discover_fallback(body: OpportunityFallbackRequest):
+        import hashlib, json
+        import httpx
+        from bs4 import BeautifulSoup
+        from urllib.parse import urlparse
+
+        base = " ".join(x.strip() for x in (body.goal, body.market) if x.strip())
+        keys = [x.strip() for x in body.keywords if x.strip()]
+        queries = [base] + [f"{base} {k}" for k in keys]
+        queries += [f"{base} купить бизнес", f"{base} оптом", f"{base} поставщик", f"{base} партнер"]
+        queries = list(dict.fromkeys(q for q in queries if q))[:body.max_queries]
+        raw = []
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12, connect=6), follow_redirects=True) as client:
+            for q in queries:
+                try:
+                    rr = await client.get(
+                        "https://html.duckduckgo.com/html/",
+                        params={"q": q},
+                        headers={"User-Agent": "AKSI-Opportunity-Engine/1.1"},
+                    )
+                    rr.raise_for_status()
+                    soup = BeautifulSoup(rr.text, "html.parser")
+                    for a in soup.select("a.result__a")[:max(5, body.max_results // max(1, len(queries)))]:
+                        url = a.get("href")
+                        title = " ".join(a.get_text(" ", strip=True).split())
+                        if url and title:
+                            raw.append({"query": q, "url": url, "title": title})
+                except Exception as exc:
+                    raw.append({"query": q, "url": "", "title": "", "error": type(exc).__name__})
+
+        seen, opportunities = set(), []
+        terms = [x.lower() for x in keys]
+        for item in raw:
+            url = item.get("url", "")
+            if not url or url in seen: continue
+            seen.add(url)
+            text = (item.get("title", "") + " " + item.get("url", "")).lower()
+            matched = [x for x in terms if x in text]
+            intent = sum(x in text for x in ("купить", "оптом", "партнер", "поставщик", "business", "wholesale", "buyer"))
+            opportunities.append({
+                "title": item.get("title", ""),
+                "url": url,
+                "domain": urlparse(url).netloc.lower(),
+                "query": item.get("query", ""),
+                "score": min(100, 20 + len(matched) * 15 + intent * 8),
+                "matched_keywords": matched,
+                "intent_signals": intent,
+                "next_action": "open_and_verify",
+            })
+        opportunities.sort(key=lambda x: (-x["score"], x["domain"], x["title"]))
+        opportunities = opportunities[:body.max_results]
+        payload = {
+            "goal": body.goal, "market": body.market, "queries": queries,
+            "opportunities": opportunities,
+            "summary": {
+                "queries_run": len(queries), "raw_results": len(raw),
+                "unique_opportunities": len(opportunities),
+                "domains": len({x["domain"] for x in opportunities}),
+            },
+        }
+        canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return {
+            "ok": True,
+            "engine": "AKSI Opportunity Engine",
+            "version": "1.1-fallback",
+            **payload,
+            "receipt": {
+                "protocol": "AKSI-OE/1",
+                "result_hash": "sha256:" + hashlib.sha256(canonical.encode()).hexdigest(),
+                "claim_boundary": "integrity of the generated opportunity map; public web results require independent verification",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        }
+
 try:
     from app.middleware.aksi_seal import AksiSealMiddleware
     app.add_middleware(AksiSealMiddleware); SEAL_MIDDLEWARE=True
