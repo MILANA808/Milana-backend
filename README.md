@@ -57,8 +57,8 @@ Private signing material is never stored in public source files. Configure secre
 - `POST /api/agent/tasks`
 - `GET /api/agent/tasks/{task_id}`
 - `POST /api/agent/browser/sessions`
-- `POST /api/agent/tasks/{task_id}/approvals` · request an action approval
-- `POST /api/agent/tasks/{task_id}/approvals/grant` · grant exactly one requested action
+- `POST /api/core/tasks/{task_id}/approval` · request an action approval
+- `POST /api/core/tasks/{task_id}/approval/{approval_id}/grant` · grant exactly one requested action
 - `POST /api/world/search`
 - `GET /api/codex`
 - Admin UI: `/admin-ui/`
