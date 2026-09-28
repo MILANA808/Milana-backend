@@ -18,6 +18,7 @@ AKSI Infinity is a model-independent agent runtime. A task can be planned, resea
 - Evidence and source tracking
 - Integrity receipts (`AKSI-VAI/1`)
 - Explicit permissions for internet, browser actions, downloads, memory and external actions
+- Task-scoped, one-time approvals for UI-mutating browser actions
 
 Browser deployment requires Chromium; the Docker image installs it automatically.
 
@@ -43,7 +44,7 @@ docker-compose up -d
 
 ## Identity
 
-- DID: `did:aksi:ed25519:sovereign-2026`
+- DID: generated from the deployed Ed25519 public key (`did:aksi:ed25519:<sha256(pubkey)[:32]>`); retrieve it from `/aksi/seal/public`
 - Contact: **aksilove@internet.ru**
 
 Private signing material is never stored in public source files. Configure secrets through deployment environment/secret storage.
@@ -56,6 +57,8 @@ Private signing material is never stored in public source files. Configure secre
 - `POST /api/agent/tasks`
 - `GET /api/agent/tasks/{task_id}`
 - `POST /api/agent/browser/sessions`
+- `POST /api/agent/tasks/{task_id}/approvals` · request an action approval
+- `POST /api/agent/tasks/{task_id}/approvals/grant` · grant exactly one requested action
 - `POST /api/world/search`
 - `GET /api/codex`
 - Admin UI: `/admin-ui/`
