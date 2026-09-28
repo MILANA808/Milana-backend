@@ -25,7 +25,7 @@ def optional_router(module, attr="router"):
         return None,False
 
 ROUTERS=[]
-for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.approval_api","app.api.core","app.api.opportunity"]:
+for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core","app.api.opportunity"]:
     r,ok=optional_router(mod)
     if ok and r: app.include_router(r); ROUTERS.append(mod)
 
