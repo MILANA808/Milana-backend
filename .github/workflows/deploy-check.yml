@@ -1,0 +1,30 @@
+name: AKSI backend deploy check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Compile
+        run: python -m compileall -q main.py app aksi
+      - name: Health contract
+        run: |
+          python - <<'PY'
+          from main import app
+          assert app.title
+          routes = {getattr(r, "path", "") for r in app.routes}
+          assert "/health" in routes
+          assert "/api/agent/tasks" in routes
+          print("AKSI backend contract PASS")
+          PY
