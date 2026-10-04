@@ -21,13 +21,19 @@ app.add_middleware(CORSMiddleware,allow_origins=_origins,allow_credentials=False
 def optional_router(module, attr="router"):
     try:
         m=__import__(module,fromlist=[attr]); return getattr(m,attr),True
-    except Exception:
+    except Exception as exc:
         return None,False
 
 ROUTERS=[]
+ROUTER_ERRORS={}
 for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core","app.api.opportunity","app.api.discovery"]:
     r,ok=optional_router(mod)
     if ok and r: app.include_router(r); ROUTERS.append(mod)
+    else:
+        try:
+            __import__(mod,fromlist=["router"])
+        except Exception as exc:
+            ROUTER_ERRORS[mod]={"type":type(exc).__name__,"error":str(exc)[:500]}
 
 # Compatibility fallback: keep the public Opportunity Engine route available even if
 # an optional router import is temporarily unavailable. The endpoint remains
@@ -189,7 +195,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE}
+    return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE,"router_errors":ROUTER_ERRORS}
 @app.get("/version")
 async def version(): return {"version":VERSION,"api":"aksi-backend","author":"AKSI Project"}
 @app.get("/api/codex")
