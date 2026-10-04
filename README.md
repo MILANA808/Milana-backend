@@ -22,6 +22,13 @@ AKSI Infinity is a model-independent agent runtime. A task can be planned, resea
 
 Browser deployment requires Chromium; the Docker image installs it automatically.
 
+
+## One-click deploy
+
+<a href="https://render.com/deploy?repo=https://github.com/MILANA808/Milana-backend"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render"></a>
+
+После нажатия Render прочитает render.yaml и создаст сервис AKSI. Нужен только аккаунт Render и, если нужен облачный LLM, один API key в Environment. Ключи не попадают в GitHub.
+
 ## Quick Start
 
 ### Backend API Server
