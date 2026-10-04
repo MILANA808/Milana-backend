@@ -38,6 +38,9 @@ jobs:
           assert app.title
           assert "/health" in routes
           assert "/api/agent/tasks" in routes
+          assert "/api/agent/browser/sessions" in routes
+          assert "/api/core/runtime" in routes
+          assert "/api/discovery/plan" in routes
           print("AKSI backend contract PASS")
           PY
       - name: Upload diagnostics
