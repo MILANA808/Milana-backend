@@ -21,10 +21,21 @@ jobs:
       - name: Health contract
         run: |
           python - <<'PY'
-          from main import app
+          import json
+          from main import app, ROUTER_ERRORS
+          routes = sorted({getattr(r, "path", "") for r in app.routes})
+          diagnostics = {"routes": routes, "router_errors": ROUTER_ERRORS}
+          open("backend-diagnostics.json", "w", encoding="utf-8").write(json.dumps(diagnostics, ensure_ascii=False, indent=2))
+          print(json.dumps(diagnostics, ensure_ascii=False, indent=2))
           assert app.title
-          routes = {getattr(r, "path", "") for r in app.routes}
           assert "/health" in routes
           assert "/api/agent/tasks" in routes
           print("AKSI backend contract PASS")
           PY
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-diagnostics
+          path: backend-diagnostics.json
+          if-no-files-found: ignore
