@@ -24,7 +24,15 @@ jobs:
           import json
           from main import app, ROUTER_ERRORS
           routes = sorted({getattr(r, "path", "") for r in app.routes})
-          diagnostics = {"routes": routes, "router_errors": ROUTER_ERRORS}
+          import importlib
+          modules = {}
+          for name in ["app.api.web_agent","app.api.browser_agent","app.api.core","app.api.discovery","app.api.opportunity"]:
+              try:
+                  m=importlib.import_module(name); r=getattr(m,"router",None)
+                  modules[name]={"router_type":type(r).__name__ if r is not None else None,"router_routes":len(getattr(r,"routes",[])) if r is not None else 0}
+              except Exception as exc:
+                  modules[name]={"error_type":type(exc).__name__,"error":str(exc)}
+          diagnostics = {"routes": routes, "router_errors": ROUTER_ERRORS, "critical_modules": modules}
           open("backend-diagnostics.json", "w", encoding="utf-8").write(json.dumps(diagnostics, ensure_ascii=False, indent=2))
           print(json.dumps(diagnostics, ensure_ascii=False, indent=2))
           assert app.title
