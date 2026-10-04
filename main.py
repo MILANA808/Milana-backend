@@ -47,7 +47,7 @@ for _mod, _attr in [
     if _mod not in ROUTERS:
         try:
             _router = getattr(__import__(_mod, fromlist=[_attr]), _attr)
-            app.include_router(_router)
+            app.router.routes.extend(_router.routes)
             ROUTERS.append(_mod)
         except Exception as _exc:
             ROUTER_ERRORS[_mod] = {"type": type(_exc).__name__, "error": str(_exc)[:500]}
