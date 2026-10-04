@@ -35,6 +35,23 @@ for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.
         except Exception as exc:
             ROUTER_ERRORS[mod]={"type":type(exc).__name__,"error":str(exc)[:500]}
 
+# Critical execution-plane routers are explicit: these define the canonical Runtime API.
+# Do not rely on optional-router discovery for the core execution path.
+for _mod, _attr in [
+    ("app.api.web_agent", "router"),
+    ("app.api.browser_agent", "router"),
+    ("app.api.core", "router"),
+    ("app.api.discovery", "router"),
+    ("app.api.opportunity", "router"),
+]:
+    if _mod not in ROUTERS:
+        try:
+            _router = getattr(__import__(_mod, fromlist=[_attr]), _attr)
+            app.include_router(_router)
+            ROUTERS.append(_mod)
+        except Exception as _exc:
+            ROUTER_ERRORS[_mod] = {"type": type(_exc).__name__, "error": str(_exc)[:500]}
+
 # Compatibility fallback: keep the public Opportunity Engine route available even if
 # an optional router import is temporarily unavailable. The endpoint remains
 # model-independent and is intentionally small/observable.
