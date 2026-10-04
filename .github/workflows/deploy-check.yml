@@ -20,28 +20,23 @@ jobs:
         run: python -m compileall -q main.py app aksi
       - name: Health contract
         run: |
-          python - <<'PY'
+          python - <<'PY' > backend-diagnostics.json 2>&1
           import json
-          from main import app, ROUTER_ERRORS
-          routes = sorted({getattr(r, "path", "") for r in app.routes})
-          import importlib
-          modules = {}
-          for name in ["app.api.web_agent","app.api.browser_agent","app.api.core","app.api.discovery","app.api.opportunity"]:
-              try:
-                  m=importlib.import_module(name); r=getattr(m,"router",None)
-                  modules[name]={"router_type":type(r).__name__ if r is not None else None,"router_routes":len(getattr(r,"routes",[])) if r is not None else 0}
-              except Exception as exc:
-                  modules[name]={"error_type":type(exc).__name__,"error":str(exc)}
-          diagnostics = {"routes": routes, "router_errors": ROUTER_ERRORS, "routers": ROUTERS, "critical_modules": modules}
-          open("backend-diagnostics.json", "w", encoding="utf-8").write(json.dumps(diagnostics, ensure_ascii=False, indent=2))
-          print(json.dumps(diagnostics, ensure_ascii=False, indent=2))
-          assert app.title
-          assert "/health" in routes
-          assert "/api/agent/tasks" in routes
-          assert "/api/agent/browser/sessions" in routes
-          assert "/api/core/runtime" in routes
-          assert "/api/discovery/plan" in routes
-          print("AKSI backend contract PASS")
+          try:
+              import main
+              app=main.app
+              routes=sorted({getattr(r,"path","") for r in app.routes})
+              print(json.dumps({"routes":routes,"routers":getattr(main,"ROUTERS",[]),"router_errors":getattr(main,"ROUTER_ERRORS",{})},ensure_ascii=False,indent=2))
+              assert app.title
+              assert "/health" in routes
+              assert "/api/agent/tasks" in routes
+              assert "/api/agent/browser/sessions" in routes
+              assert "/api/core/runtime" in routes
+              assert "/api/discovery/plan" in routes
+              print("AKSI backend contract PASS")
+          except Exception as exc:
+              print(json.dumps({"import_or_contract_error":type(exc).__name__,"error":str(exc)},ensure_ascii=False,indent=2))
+              raise
           PY
       - name: Upload diagnostics
         if: always()
