@@ -320,3 +320,20 @@ async def record_key(request:CryptoKeyRecordRequest):
 async def keys(limit:int=50): return {"keys":crypto_keys_storage[-limit:]}
 if __name__=="__main__":
     import uvicorn; uvicorn.run(app,host="0.0.0.0",port=8000)
+
+
+# Final route mount: perform after all canonical application routes are declared.
+# This is intentionally explicit so the execution-plane routers cannot be omitted
+# by import-order/optional-router handling.
+for _final_mod in ["app.api.web_agent","app.api.browser_agent","app.api.core","app.api.discovery","app.api.opportunity"]:
+    try:
+        _final_router = getattr(__import__(_final_mod, fromlist=["router"]), "router")
+        _existing = {getattr(_r, "path", None) for _r in app.routes}
+        for _route in getattr(_final_router, "routes", []):
+            if getattr(_route, "path", None) not in _existing:
+                app.router.routes.append(_route)
+                _existing.add(getattr(_route, "path", None))
+        if _final_mod not in ROUTERS:
+            ROUTERS.append(_final_mod)
+    except Exception as _exc:
+        ROUTER_ERRORS[_final_mod] = {"type": type(_exc).__name__, "error": str(_exc)[:500]}
