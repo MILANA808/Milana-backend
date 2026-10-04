@@ -25,7 +25,7 @@ def optional_router(module, attr="router"):
         return None,False
 
 ROUTERS=[]
-for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core","app.api.opportunity"]:
+for mod in ["aksi.api","app.api_phase1","app.api.chat","app.api.admin","app.api.identity","app.api.agents","app.api.web_agent","app.api.browser_agent","app.api.core","app.api.opportunity","app.api.discovery"]:
     r,ok=optional_router(mod)
     if ok and r: app.include_router(r); ROUTERS.append(mod)
 
@@ -185,10 +185,11 @@ async def arxiv_search(q):
 
 @app.get("/")
 async def root():
-    return {"service":"Milana-backend (AKSI)","version":VERSION,"status":"running","architecture":"AKSI Core","modules":{"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"opportunity_engine":"app.api.opportunity" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE},"try":["GET /health","GET /api/core/runtime","POST /api/agent/tasks","POST /api/opportunity/discover","GET /api/core/tasks/{id}/events","POST /api/core/tasks/{id}/approval"]}
+    return {"service":"Milana-backend (AKSI)","version":VERSION,"status":"running","architecture":"AKSI Core","modules":{"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"opportunity_engine":"app.api.opportunity" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE},"try":["GET /health","GET /api/core/runtime","POST /api/agent/tasks","POST /api/discovery/plan","POST /api/discovery/observe","POST /api/opportunity/discover","GET /api/core/tasks/{id}/events","POST /api/core/tasks/{id}/approval"]}
+
 @app.get("/health")
 async def health():
-    return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE}
+    return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE}
 @app.get("/version")
 async def version(): return {"version":VERSION,"api":"aksi-backend","author":"AKSI Project"}
 @app.get("/api/codex")
