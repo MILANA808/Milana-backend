@@ -1,40 +1,52 @@
-# АКСИ Backend — запуск «сам»
+# AKSI Backend — deploy once, use from the phone
 
-GitHub Pages **не умеет** Python. Backend поднимается один раз в облаке — дальше работает сам 24/7.
+## Render Blueprint
 
-## Вариант A — Render (рекомендуется, бесплатный план)
+The repository already contains render.yaml. Open the Render Blueprint flow, connect MILANA808/Milana-backend, and Render will create the web service automatically.
 
-1. Открой https://render.com → New → Blueprint
-2. Подключи репозиторий `MILANA808/Milana-backend`
-3. Render прочитает `render.yaml` и соберёт Docker
-4. В Environment добавь секреты (Dashboard → Environment):
-   - `XAI_API_KEY` = твой ключ xAI
-   - или `OPENAI_API_KEY` = твой ключ OpenAI
-5. Deploy → получишь URL вида `https://aksi-backend-xxxx.onrender.com`
+After deployment you get a URL such as https://aksi-backend-xxxx.onrender.com.
 
-## Привязка к сайту
+### Secrets
 
-На https://milana808.github.io/aksi/ в консоли браузера:
+In Render → Environment set at least one:
+- XAI_API_KEY
+- or OPENAI_API_KEY
 
-```js
-localStorage.setItem('AKSI_API', 'https://aksi-backend-xxxx.onrender.com')
-location.reload()
-```
+Never put API keys in GitHub.
 
-Или открой `/aksi/?api=https://aksi-backend-xxxx.onrender.com`
+The Blueprint configures Docker + Chromium/Playwright, health check /health, CORS for https://milana808.github.io, automatic deploy on push to main, and a generated admin token.
 
-## Вариант B — локально одной командой
+## Connect the website
 
-```bash
-cp .env.example .env   # впиши ключи
+Open the AKSI World page and paste the backend URL into Backend URL.
+
+Or open:
+https://milana808.github.io/world/?api=https://YOUR-BACKEND.onrender.com
+
+The frontend remembers the URL locally.
+
+## Verify
+
+Open https://YOUR-BACKEND.onrender.com/health and expect HTTP 200 JSON.
+
+Then open the World page and run a harmless task such as:
+Find the official OpenAI website and return its name and URL.
+
+## Local start
+
+cp .env.example .env
 ./start.sh
-```
 
-## Проверка
+## Limits
 
-```bash
-curl https://ТВОЙ-URL/health
-curl -X POST https://ТВОЙ-URL/api/chat -H 'Content-Type: application/json' -d '{"content":"кто ты"}'
-```
+The free Render service can sleep when idle and cold-start later. It is suitable for a public prototype, not guaranteed 24/7 production.
 
-Ключи **только** в панели Render / `.env`. В git не коммитить.
+Browser actions and external side effects remain permission-gated. Never place provider API keys in frontend code.
+
+## Rollback
+
+Render auto-deploys from main. To roll back, revert the Git commit and push.
+
+## Security
+
+Never commit .env, API keys, private signing keys or admin tokens.
