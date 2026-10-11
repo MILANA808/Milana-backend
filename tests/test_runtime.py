@@ -124,3 +124,17 @@ def test_recovery_marks_interrupted_task():
     task = task_store.get(task_id)
     assert task["status"] == "RECOVERABLE" and task["stop_requested"] is False
     assert task["journal"][-1]["status"] == "recoverable"
+
+
+def test_readiness_reports_real_capability_and_signing_state():
+    with TestClient(app) as client:
+        response = client.get("/ready")
+        body = response.json()
+        assert response.status_code in (200, 503)
+        assert body["ready"] is (response.status_code == 200)
+        assert body["status"] == ("ready" if body["ready"] else "not_ready")
+        assert isinstance(body["capabilities"], dict)
+        assert isinstance(body["reasons"], list)
+        if body["signing_key_mode"] in ("ephemeral", "unavailable"):
+            assert response.status_code == 503
+            assert f"signing_identity_{body['signing_key_mode']}" in body["reasons"]
