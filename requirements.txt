@@ -13,8 +13,9 @@ aiohttp>=3.9.1
 python-jose[cryptography]>=3.3.0
 cryptography>=42.0.0
 
-# Numerical (quantum tools)
+# Numerical kernel (classical linear algebra / scientific functions)
 numpy>=1.26.0
+scipy>=1.11.0
 
 # Browser computer-use runtime (install browsers in deployment with: playwright install chromium)
 playwright>=1.45.0
