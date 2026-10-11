@@ -40,6 +40,8 @@ jobs:
               assert "/api/agent/browser/sessions" in routes
               assert "/api/core/runtime" in routes
               assert "/api/discovery/plan" in routes
+              assert "/api/aksi/kernel/health" in routes
+              assert "/api/aksi/kernel/calculate" in routes
               print("AKSI backend contract PASS")
           except Exception as exc:
               print(json.dumps({"import_or_contract_error":type(exc).__name__,"error":str(exc)},ensure_ascii=False,indent=2))
