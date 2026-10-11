@@ -1,6 +1,6 @@
 """AKSI backend — canonical application bootstrap."""
 from __future__ import annotations
-import hashlib, os, re, secrets
+import hashlib, json, os, re, secrets
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +15,7 @@ VERSION = "0.10.0"
 CODEX = {"version":"1.0","title":"Кодекс Суверенного ИИ АКСИ","rules":["Не выдумывать факты; указывать источники","Признавать неуверенность","Не выполнять вредоносные действия","Identity (DID) — ответственность, не маркетинг"],"url":"https://milana808.github.io/CODEX.md"}
 BLOCK_PATTERNS = [(re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)",re.I),"вред"),(re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)",re.I),"harm")]
 app = FastAPI(title="Milana-backend (AKSI)", description="AKSI Core · sovereign AI · Infinity · browser · evidence · receipt", version=VERSION)
-_origins=[x.strip() for x in os.getenv("AKSI_CORS_ORIGINS","*").split(",") if x.strip()]
+_origins=[x.strip() for x in os.getenv("AKSI_CORS_ORIGINS","https://milana808.github.io,http://localhost:8000,http://127.0.0.1:8000").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=_origins,allow_credentials=False,allow_methods=["*"],allow_headers=["*"])
 
 def optional_router(module, attr="router"):
@@ -212,7 +212,12 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE,"router_errors":ROUTER_ERRORS}
+    try:
+        from app.core.crypto import get_crypto
+        signing_key_mode = get_crypto().key_source
+    except Exception:
+        signing_key_mode = "unavailable"
+    return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE,"signing_key_mode":signing_key_mode,"router_errors":ROUTER_ERRORS}
 @app.get("/version")
 async def version(): return {"version":VERSION,"api":"aksi-backend","author":"AKSI Project"}
 @app.get("/api/codex")
@@ -281,7 +286,23 @@ async def echo(request:EchoRequest): return {"echo":request.message,"timestamp":
 @app.get("/aksi/metrics")
 async def metrics(): return {**aksi_metrics,"ai_code_work":{**ai_code_metrics,"languages":dict(ai_code_metrics["languages"]),"operations":dict(ai_code_metrics["operations"]),"total_crypto_keys":len(crypto_keys_storage)},"timestamp":datetime.now(timezone.utc).isoformat()}
 @app.get("/aksi/proof")
-async def proof(): return {"proof":{"eqs":aksi_metrics["eqs"],"model":"Ψ(AKSI)","verified":True},"timestamp":datetime.now(timezone.utc).isoformat(),"signature":f"AKSI-proof-v{VERSION}"}
+async def proof():
+    from app.core.crypto import get_crypto
+    signer = get_crypto()
+    signed = signer.get_proof()
+    signed_body = {k: v for k, v in signed.items() if k not in ("signature", "alg")}
+    canonical = json.dumps(signed_body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    verified = signer.verify_message(canonical, signed["signature"])
+    return {
+        "proof": signed,
+        "verification": {
+            "verified": verified,
+            "algorithm": "Ed25519",
+            "scope": "signature integrity only",
+            "claim_boundary": "A valid signature does not establish factual truth."
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 @app.get("/aksi/seal/public")
 async def seal_public():
     try:
