@@ -18,7 +18,13 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt
       - name: Compile
-        run: python -m compileall -q main.py app aksi
+        run: python -m compileall -q main.py app aksi aksi_kernel.py
+      - name: AKSI numerical-kernel demo and proof self-check
+        run: |
+          python aksi_kernel.py | tee aksi-kernel-demo.log
+          grep -q 'status: ✓ verified' aksi-kernel-demo.log
+          grep -q 'proof self-check: True' aksi-kernel-demo.log
+          grep -q 'Stable: True' aksi-kernel-demo.log
       - name: Health contract
         run: |
           python - <<'PY' > backend-diagnostics.json 2>&1
@@ -44,5 +50,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-diagnostics
-          path: backend-diagnostics.json
+          path: |
+            backend-diagnostics.json
+            aksi-kernel-demo.log
           if-no-files-found: ignore
