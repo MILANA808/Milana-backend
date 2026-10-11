@@ -25,7 +25,7 @@ async def _stream_chunks(message: str, mode: str, history, memory: str, session_
     try:
         from app.core.llm import generate
 
-        async for chunk in generate(message, session_id=session_id, history=history):
+        async for chunk in generate(message, session_id=session_id, history=history, memory_text=memory):
             yield chunk
         return
     except Exception:
