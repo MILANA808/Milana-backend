@@ -30,6 +30,7 @@ def _canonical(obj: Any) -> str:
 class AksiCrypto:
     def __init__(self, key_dir: Optional[str] = None):
         self.key_dir = key_dir or os.getenv("AKSI_KEY_DIR", "")
+        self.key_source = "ephemeral"
         self._private: Ed25519PrivateKey
         self._public: Ed25519PublicKey
         self._load_or_create()
@@ -43,6 +44,22 @@ class AksiCrypto:
         )
 
     def _load_or_create(self) -> None:
+        # Inject a stable Ed25519 PKCS#8 PEM or DER key as base64 from a secret manager.
+        # Never commit this value or the decoded private key to source control.
+        encoded = os.getenv("AKSI_PRIVATE_KEY_B64", "").strip()
+        if encoded:
+            raw = base64.b64decode(encoded, validate=True)
+            try:
+                key = serialization.load_pem_private_key(raw, password=None)
+            except ValueError:
+                key = serialization.load_der_private_key(raw, password=None)
+            if not isinstance(key, Ed25519PrivateKey):
+                raise TypeError("AKSI_PRIVATE_KEY_B64 must encode an Ed25519 private key")
+            self._private = key
+            self._public = key.public_key()
+            self.key_source = "environment"
+            return
+
         priv_path, pub_path = self._paths()
         if os.path.isfile(priv_path):
             with open(priv_path, "rb") as f:
@@ -51,6 +68,7 @@ class AksiCrypto:
                 raise TypeError("AKSI key must be Ed25519")
             self._private = key
             self._public = key.public_key()
+            self.key_source = "file"
             return
         self._private = Ed25519PrivateKey.generate()
         self._public = self._private.public_key()
@@ -70,6 +88,7 @@ class AksiCrypto:
                         format=serialization.PublicFormat.SubjectPublicKeyInfo,
                     )
                 )
+            self.key_source = "file"
 
     def public_key_raw(self) -> bytes:
         return self._public.public_bytes(
