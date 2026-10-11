@@ -24,7 +24,7 @@ class ClickRequest(BaseModel): selector:str=Field(min_length=1,max_length=1000);
 class TypeRequest(BaseModel): selector:str=Field(min_length=1,max_length=1000); text:str=Field(max_length=10000); submit:bool=False; approval_token:str=Field(min_length=16,max_length=200)
 def _safe_public_url(url:str)->str:
     parsed=urlparse(url)
-    if parsed.scheme not in {"http","https"} or not parsed.hostname: raise HTTPException(400,"Only public http(s) URLs are allowed")
+    if parsed.scheme not in {"http","https"} or not parsed.hostname or parsed.username or parsed.password: raise HTTPException(400,"Only public http(s) URLs without embedded credentials are allowed")
     host=parsed.hostname.lower().rstrip(".")
     if host in {"localhost","localhost.localdomain"} or host.endswith(".local"): raise HTTPException(403,"Local/internal hosts are blocked")
     try:
@@ -43,7 +43,18 @@ async def create_browser_session(body:BrowserCreate):
     if not load_task(body.task_id): raise HTTPException(404,"Task not found")
     if async_playwright is None: raise HTTPException(503,"Playwright is not installed")
     async with _LOCK:
-        pw=await async_playwright().start(); browser=await pw.chromium.launch(headless=body.headless); context=await browser.new_context(); page=await context.new_page(); sid="aksi-browser-"+secrets.token_hex(8)
+        pw=await async_playwright().start(); browser=await pw.chromium.launch(headless=body.headless); context=await browser.new_context(); page=await context.new_page()
+        async def guard_navigation(route, request):
+            # Check every navigation, including redirects, before it is sent.
+            if request.is_navigation_request():
+                try:
+                    _safe_public_url(request.url)
+                except HTTPException:
+                    await route.abort()
+                    return
+            await route.continue_()
+        await page.route("**/*", guard_navigation)
+        sid="aksi-browser-"+secrets.token_hex(8)
         _SESSIONS[sid]={"pw":pw,"browser":browser,"context":context,"page":page,"task_id":body.task_id}
     return {"ok":True,"session_id":sid,"status":"READY","capabilities":["navigate","click","type","read","screenshot"],"task_id":body.task_id}
 @router.post("/sessions/{session_id}/navigate")
