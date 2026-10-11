@@ -14,6 +14,8 @@ services:
         value: AKSI_DIMAX_v3_2026
       - key: AKSI_ADMIN_TOKEN
         generateValue: true
+      - key: AKSI_PRIVATE_KEY_B64
+        sync: false
       - key: XAI_API_KEY
         sync: false
       - key: OPENAI_API_KEY
