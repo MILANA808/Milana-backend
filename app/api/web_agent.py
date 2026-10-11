@@ -221,24 +221,39 @@ async def execute(tid: str) -> None:
             event(t,f"Поиск завершён: {len(unique)} уникальных страниц-кандидатов.")
             if t["permissions"].get("read_pages"):
                 sem=asyncio.Semaphore(12)
+                page_failures: List[Dict[str, str]] = []
                 async def one(x):
                     async with sem:
                         try:
                             p=await fetch_page(client,x["url"])
-                            return {**x,**p} if p["status"]<400 and p["text"] else None
-                        except Exception: return None
+                            if p["status"] >= 400 or not p["text"]:
+                                page_failures.append({"url": x.get("url", ""), "reason": f"HTTP {p['status']}" if p["status"] >= 400 else "empty_or_non_html"})
+                                return None
+                            return {**x,**p}
+                        except Exception as exc:
+                            page_failures.append({"url": x.get("url", ""), "reason": type(exc).__name__})
+                            return None
                 pages=await asyncio.gather(*[one(x) for x in unique],return_exceptions=False)
                 for p in pages:
                     if p and len(t["sources"])<t["max_sources"]: t["sources"].append(p)
                 event(t,f"Прочитано {len(t['sources'])} страниц.")
+                if page_failures:
+                    examples = "; ".join(f"{urlparse(x['url']).netloc or 'unknown'}: {x['reason']}" for x in page_failures[:5])
+                    event(t,f"Не удалось прочитать страниц: {len(page_failures)}. Примеры: {examples}","warning")
+            if not unique:
+                event(t,"Поиск не вернул доступных публичных страниц. Проверь доступ к поисковику и формулировку цели.","warning")
         if stopped(t) or timed_out(t): t["status"]="STOPPED"; event(t,"Выполнение остановлено или достигнут лимит времени.","stopped"); return
         if t["permissions"].get("browser_actions"): event(t,"Browser read-mode включён."); await browser_autopilot(t)
         if stopped(t) or timed_out(t): t["status"]="STOPPED"; event(t,"Выполнение остановлено или достигнут лимит времени.","stopped"); return
         t["status"]="ANALYZING"; event(t,"Источники собраны. Запускаю аналитический контур."); t["analysis"]=await model_analyze(t)
+        model_unavailable = isinstance(t["analysis"], str) and "Model gateway unavailable:" in t["analysis"]
+        if model_unavailable:
+            event(t,"Поставщик языковой модели недоступен. Отчёт будет помечен как наблюдение, а не полноценный AI-анализ.","warning")
         t["findings"]=[{"source":s["title"],"url":s["url"],"excerpt":s["text"][:700]} for s in t["sources"]]
         t["status"]="VERIFYING"; event(t,"Проверяю покрытие источниками и независимость доменов.")
         domains={urlparse(s["url"]).netloc for s in t["sources"] if public_url(s["url"])}
-        t["verification"]={"sources_count":len(t["sources"]),"independent_source_count":len(domains),"status":"SUPPORTED" if len(t["sources"])>=2 else ("OBSERVATION" if t["sources"] else "NO_EVIDENCE"),"note":"Источник не означает истину.","controller":"AKSI Cognitive Runtime"}
+        evidence_status = "NO_EVIDENCE" if not t["sources"] else ("OBSERVATION" if model_unavailable or len(domains)<2 else "MULTI_SOURCE")
+        t["verification"]={"sources_count":len(t["sources"]),"independent_source_count":len(domains),"status":evidence_status,"note":"MULTI_SOURCE означает наличие материалов с разных доменов, а не доказательство истинности вывода.","model_available":not model_unavailable,"controller":"AKSI Cognitive Runtime"}
         t["status"]="COMPLETED"; t["report"]={"title":"AKSI Infinity — отчёт","goal":t["goal"],"summary":f"Источников: {len(t['sources'])}; независимых доменов: {len(domains)}","analysis":t["analysis"],"findings":t["findings"],"verification":t["verification"],"browser":t.get("browser",{}),"queries":t["queries"]}; t["receipt"]=receipt(t); event(t,"Отчёт готов.","completed")
     except asyncio.CancelledError:
         t["status"]="STOPPED"; event(t,"Worker task cancelled.","stopped"); raise
