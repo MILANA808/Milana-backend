@@ -112,7 +112,7 @@ async def fetch_page(client: httpx.AsyncClient, url: str) -> Dict[str, Any]:
         return {"url": str(r.url), "status": r.status_code, "text": "", "title": str(r.url)}
     s = BeautifulSoup(r.text, "html.parser")
     for tag in s(["script", "style", "noscript", "svg"]): tag.decompose()
-    return {"url": str(r.url), "status": r.status_code, "title": s.title.get_text(strip=True) if s.title else str(r.url), "text": re.sub(r"\\s+", " ", s.get_text(" ", strip=True))[:MAX_PAGE_CHARS]}
+    return {"url": str(r.url), "status": r.status_code, "title": s.title.get_text(strip=True) if s.title else str(r.url), "text": re.sub(r"\s+", " ", s.get_text(" ", strip=True))[:MAX_PAGE_CHARS]}
 
 def make_plan(goal: str) -> List[str]:
     return [
