@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -218,6 +218,39 @@ async def health():
     except Exception:
         signing_key_mode = "unavailable"
     return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE,"signing_key_mode":signing_key_mode,"router_errors":ROUTER_ERRORS}
+@app.get("/ready")
+async def readiness():
+    """Readiness check: unlike liveness, this fails when required runtime capabilities are unavailable."""
+    try:
+        from app.core.crypto import get_crypto
+        signing_key_mode = get_crypto().key_source
+    except Exception:
+        signing_key_mode = "unavailable"
+
+    capabilities = {
+        "core": "app.api.core" in ROUTERS,
+        "web_agent": "app.api.web_agent" in ROUTERS,
+        "browser_agent": "app.api.browser_agent" in ROUTERS,
+        "discovery_runtime": "app.api.discovery" in ROUTERS,
+        "opportunity_engine": "app.api.opportunity" in ROUTERS,
+        "durable_tasks": TASK_STORE_AVAILABLE,
+    }
+    reasons = [f"missing_capability:{name}" for name, available in capabilities.items() if not available]
+    if signing_key_mode in ("ephemeral", "unavailable"):
+        reasons.append(f"signing_identity_{signing_key_mode}")
+
+    ready = not reasons
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={
+            "status": "ready" if ready else "not_ready",
+            "ready": ready,
+            "reasons": reasons,
+            "capabilities": capabilities,
+            "signing_key_mode": signing_key_mode,
+        },
+    )
+
 @app.get("/version")
 async def version(): return {"version":VERSION,"api":"aksi-backend","author":"AKSI Project"}
 @app.get("/api/codex")
