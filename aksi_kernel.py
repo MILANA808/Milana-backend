@@ -65,6 +65,26 @@ class QBMResult:
     byte_length: int
     visible_state: tuple[float, ...]
 
+    @property
+    def E(self) -> float:
+        """Convenience alias for expected energy."""
+        return self.energy
+
+    @property
+    def F(self) -> float:
+        """Convenience alias for free energy."""
+        return self.free_energy
+
+    @property
+    def Z(self) -> float:
+        """Convenience alias for the partition function."""
+        return self.partition_function
+
+    @property
+    def H_eff(self) -> float:
+        """Convenience alias for the effective coherence index."""
+        return self.effective_coherence
+
 
 class QuantumBoltzmannMachine:
     """Vectorized classical RBM-inspired thermodynamic model.
@@ -314,16 +334,18 @@ class SovereignProof:
             "gershgorin": g_data,
         }
         digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
-        return {
+        proof = {
             **payload,
             "sha256": digest,
             "key_prefix": digest[:8].upper(),
-            "status": "✓ verified",
+            "status": "pending verification",
             "claim_boundary": (
                 "SHA-256 confirms record integrity when verified; it does not establish "
                 "scientific truth, physical quantum behavior, or trusted identity."
             ),
         }
+        proof["status"] = "✓ verified" if cls.verify(proof) else "✗ invalid"
+        return proof
 
     @staticmethod
     def verify(proof: Mapping[str, Any]) -> bool:
