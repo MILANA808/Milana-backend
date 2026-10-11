@@ -23,6 +23,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
 import numpy as np
 from numpy.typing import NDArray
 from scipy.special import logsumexp
@@ -288,6 +290,15 @@ class GershgorinStability:
         )
 
 
+router = APIRouter(prefix="/api/aksi/kernel", tags=["AKSI Numerical Kernel"])
+
+
+class KernelRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=10000)
+    empathy: float = Field(default=0.5, ge=0.0, le=1.0)
+    coherence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
 class SovereignProof:
     """Create and verify SHA-256 integrity receipts for recorded diagnostics.
 
@@ -359,6 +370,40 @@ class SovereignProof:
             return secrets.compare_digest(expected, str(proof.get("sha256", "")))
         except (TypeError, ValueError):
             return False
+
+
+@router.get("/health")
+async def kernel_health() -> dict[str, str]:
+    return {"ok": "true", "kernel": "AKSI-MATRIX-PY/1", "mode": "classical-numerical"}
+
+
+@router.post("/calculate")
+async def calculate_kernel(body: KernelRequest) -> dict[str, Any]:
+    """Run QBM-inspired thermodynamics, Gershgorin diagnostics and proof."""
+    qbm_result = QuantumBoltzmannMachine().calculate(
+        body.text, empathy=body.empathy, coherence=body.coherence
+    )
+    matrix = np.array([
+        [0.10 + 0.02j, 0.03, 0.02j, 0.01],
+        [0.02, 0.12 - 0.01j, 0.02, 0.01j],
+        [0.01j, 0.02, 0.08, 0.03],
+        [0.01, 0.01j, 0.02, 0.09 + 0.01j],
+    ], dtype=np.complex128)
+    stability = GershgorinStability.analyze(matrix)
+    proof = SovereignProof.generate(qbm_result, stability)
+    return {
+        "protocol": "AKSI-MATRIX-KERNEL/1",
+        "qbm": asdict(qbm_result),
+        "gershgorin": {
+            "discs": [asdict(disc) for disc in stability.discs],
+            "stability_radius": stability.stability_radius,
+            "stable": stability.stable,
+            "stable_percent": stability.stable_percent,
+            "status": stability.status,
+        },
+        "proof": proof,
+        "proof_valid": SovereignProof.verify(proof),
+    }
 
 
 def demo() -> None:
