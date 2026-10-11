@@ -325,7 +325,7 @@ if __name__=="__main__":
 # Final route mount: perform after all canonical application routes are declared.
 # This is intentionally explicit so the execution-plane routers cannot be omitted
 # by import-order/optional-router handling.
-for _final_mod in ["app.api.web_agent","app.api.browser_agent","app.api.core","app.api.discovery","app.api.opportunity"]:
+for _final_mod in ["app.api.web_agent","app.api.browser_agent","app.api.core","app.api.discovery","app.api.opportunity","aksi_kernel"]:
     try:
         _final_router = getattr(__import__(_final_mod, fromlist=["router"]), "router")
         _existing = {getattr(_r, "path", None) for _r in app.routes}
