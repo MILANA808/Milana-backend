@@ -1,9 +1,9 @@
 """AKSI Infinity durable agent runtime and worker."""
 from __future__ import annotations
-import asyncio, hashlib, json, os, re, secrets
+import asyncio, hashlib, ipaddress, json, os, re, secrets, socket
 from datetime import datetime, timezone
 from typing import Any, Dict, List
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException
@@ -51,9 +51,21 @@ def timed_out(t: Dict[str, Any]) -> bool:
     return (datetime.now(timezone.utc).timestamp() - float(t.get("_started_epoch", 0))) > MAX_RUNTIME_SECONDS
 
 def public_url(url: str) -> bool:
+    """Allow only HTTP(S) hosts resolving exclusively to globally routable IPs."""
     try:
-        p = urlparse(url); h = (p.hostname or "").lower().rstrip(".")
-        return p.scheme in {"http", "https"} and bool(h) and h not in {"localhost", "127.0.0.1"} and not h.endswith(".local") and not h.startswith("169.254.")
+        p = urlparse(url)
+        h = (p.hostname or "").lower().rstrip(".")
+        if p.scheme not in {"http", "https"} or not h or p.username or p.password:
+            return False
+        if h == "localhost" or h.endswith((".local", ".internal", ".localhost")):
+            return False
+        try:
+            return ipaddress.ip_address(h).is_global
+        except ValueError:
+            pass
+        port = p.port or (443 if p.scheme == "https" else 80)
+        answers = socket.getaddrinfo(h, port, type=socket.SOCK_STREAM)
+        return bool(answers) and all(ipaddress.ip_address(item[4][0]).is_global for item in answers)
     except Exception:
         return False
 
@@ -78,17 +90,29 @@ def make_queries(goal: str) -> List[str]:
     return list(dict.fromkeys(variants))[:MAX_QUERIES]
 
 async def fetch_page(client: httpx.AsyncClient, url: str) -> Dict[str, Any]:
-    if not public_url(url):
-        raise ValueError("blocked_url")
-    r = await client.get(url, follow_redirects=True, headers={"User-Agent": "AKSI-Infinity/4.0"})
-    if not public_url(str(r.url)):
+    # Validate every redirect target before requesting it; never auto-follow untrusted redirects.
+    current = url
+    r = None
+    for _ in range(6):
+        if not public_url(current):
+            raise ValueError("blocked_url_or_redirect")
+        r = await client.get(current, follow_redirects=False, headers={"User-Agent": "AKSI-Infinity/4.0"})
+        if r.status_code not in {301, 302, 303, 307, 308}:
+            break
+        location = r.headers.get("location")
+        if not location:
+            raise ValueError("redirect_without_location")
+        current = urljoin(str(r.url), location)
+    else:
+        raise ValueError("too_many_redirects")
+    if r is None or not public_url(str(r.url)):
         raise ValueError("blocked_redirect")
     ct = r.headers.get("content-type", "")
     if "text/html" not in ct:
         return {"url": str(r.url), "status": r.status_code, "text": "", "title": str(r.url)}
     s = BeautifulSoup(r.text, "html.parser")
     for tag in s(["script", "style", "noscript", "svg"]): tag.decompose()
-    return {"url": str(r.url), "status": r.status_code, "title": s.title.get_text(strip=True) if s.title else str(r.url), "text": re.sub(r"\s+", " ", s.get_text(" ", strip=True))[:MAX_PAGE_CHARS]}
+    return {"url": str(r.url), "status": r.status_code, "title": s.title.get_text(strip=True) if s.title else str(r.url), "text": re.sub(r"\\s+", " ", s.get_text(" ", strip=True))[:MAX_PAGE_CHARS]}
 
 def make_plan(goal: str) -> List[str]:
     return [
