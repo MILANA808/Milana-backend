@@ -10,10 +10,15 @@ on:
 permissions:
   contents: read
 
+# Do not let a scheduled probe cancel the post-deploy probe (or vice versa).
+concurrency:
+  group: aksi-live-backend-smoke
+  cancel-in-progress: false
+
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - name: Wait for Render deploy and probe public API
         env:
@@ -35,16 +40,16 @@ jobs:
               "/api/core/runtime": lambda d: d.get("ok") is True,
           }
           failures = {}
-          for attempt in range(1, 11):
+          for attempt in range(1, 7):
               failures = {}
-              print(f"Probe attempt {attempt}/10: {base}")
+              print(f"Probe attempt {attempt}/6: {base}")
               for path, validate in checks.items():
                   try:
                       req = urllib.request.Request(
                           base + path,
                           headers={"User-Agent": "AKSI-live-smoke/1.0", "Accept": "application/json"},
                       )
-                      with urllib.request.urlopen(req, timeout=20) as response:
+                      with urllib.request.urlopen(req, timeout=12) as response:
                           payload = json.loads(response.read().decode("utf-8"))
                           if response.status != 200 or not validate(payload):
                               failures[path] = {
@@ -60,8 +65,8 @@ jobs:
                   print("AKSI LIVE BACKEND: ALL CHECKS PASSED")
                   sys.exit(0)
               print(json.dumps(failures, ensure_ascii=False, indent=2))
-              if attempt < 10:
-                  time.sleep(30)
+              if attempt < 6:
+                  time.sleep(15)
           print("AKSI LIVE BACKEND: FAILED after retries")
           sys.exit(1)
           PY
