@@ -135,6 +135,7 @@ def test_readiness_reports_real_capability_and_signing_state():
         assert body["status"] == ("ready" if body["ready"] else "not_ready")
         assert isinstance(body["capabilities"], dict)
         assert isinstance(body["reasons"], list)
+        assert isinstance(body["warnings"], list)
         if body["signing_key_mode"] in ("ephemeral", "unavailable"):
-            assert response.status_code == 503
-            assert f"signing_identity_{body['signing_key_mode']}" in body["reasons"]
+            assert f"signing_identity_{body['signing_key_mode']}" in body["warnings"]
+            assert f"signing_identity_{body['signing_key_mode']}" not in body["reasons"]
