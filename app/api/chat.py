@@ -5,7 +5,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -34,30 +34,23 @@ class ChatBody(BaseModel):
         return value.strip() if value is not None else None
 
 
-async def _stream_chunks(message: str, mode: str, history, memory: str, session_id: str):
-    # Prefer the LLM gateway. If it fails before producing a result, use the local engine.
-    try:
-        from app.core.llm import generate
-
-        chunks = []
-        async for chunk in generate(message, session_id=session_id, history=history, memory_text=memory):
-            chunks.append(chunk)
-        if chunks:
-            for chunk in chunks:
-                yield chunk
-            return
-    except Exception:
-        # Keep the API available when an optional model/provider fails.
-        pass
-
-    from app.core.aksi_engine import aksi_stream
-
-    async for chunk in aksi_stream(message, mode, history, memory):
-        yield chunk
-
-
 def _message(body: ChatBody) -> str:
     return (body.message or body.content or "").strip()
+
+
+async def _stream_chunks(message: str, mode: str, history, memory: str, session_id: str):
+    # Fall back only when the gateway module cannot be imported. Runtime errors must
+    # not silently switch engines after a partial answer has already been sent.
+    try:
+        from app.core.llm import generate
+    except ImportError:
+        from app.core.aksi_engine import aksi_stream
+        async for chunk in aksi_stream(message, mode, history, memory):
+            yield chunk
+        return
+
+    async for chunk in generate(message, session_id=session_id, history=history, memory_text=memory):
+        yield chunk
 
 
 def _sse_response(body: ChatBody) -> StreamingResponse:
@@ -84,7 +77,6 @@ def _sse_response(body: ChatBody) -> StreamingResponse:
 @router.post("/chat/stream")
 async def chat_stream(body: ChatBody):
     if not _message(body):
-        from fastapi import HTTPException
         raise HTTPException(status_code=422, detail="message required")
     return _sse_response(body)
 
@@ -93,7 +85,6 @@ async def chat_stream(body: ChatBody):
 async def chat_once(body: ChatBody):
     message = _message(body)
     if not message:
-        from fastapi import HTTPException
         raise HTTPException(status_code=422, detail="message required")
     chunks = []
     async for chunk in _stream_chunks(message, body.mode, body.history, body.memory, body.session_id):
