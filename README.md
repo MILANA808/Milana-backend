@@ -23,6 +23,10 @@ AKSI Infinity is a model-independent agent runtime. A task can be planned, resea
 Browser deployment requires Chromium; the Docker image installs it automatically.
 
 
+## Cross-repository contract
+
+The public site and backend integration boundary is documented in [docs/AKSI_UNIFIED_CORE_CONTRACT.md](docs/AKSI_UNIFIED_CORE_CONTRACT.md). It records the current endpoint contract and explicit permission, evidence, receipt, and readiness semantics.
+
 ## One-click deploy
 
 <a href="https://render.com/deploy?repo=https://github.com/MILANA808/Milana-backend"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render"></a>
