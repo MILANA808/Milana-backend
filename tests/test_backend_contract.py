@@ -44,6 +44,24 @@ class PublicContractTests(unittest.TestCase):
         self.assertEqual(body.get("verification", {}).get("scope"), "signature integrity only")
         self.assertIn("does not establish factual truth", body.get("verification", {}).get("claim_boundary", ""))
 
+    def test_readiness_separates_runtime_from_signing_key_warning(self):
+        response = self.client.get("/ready")
+        self.assertIn(response.status_code, (200, 503))
+        body = response.json()
+        self.assertIn("ready", body)
+        self.assertIn("reasons", body)
+        self.assertIn("warnings", body)
+        if body.get("signing_key_mode") in ("ephemeral", "unavailable"):
+            self.assertIn(f"signing_identity_{body['signing_key_mode']}", body["warnings"])
+            self.assertNotIn(f"signing_identity_{body['signing_key_mode']}", body["reasons"])
+
+    def test_virtual_cluster_route_is_mounted_and_discloses_simulation(self):
+        response = self.client.get("/aksi/cluster/status")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body.get("kind"), "classical-cpu-simulation")
+        self.assertFalse(body.get("gpu_hardware_present"))
+
     def test_metrics_is_json_and_timestamped(self):
         response = self.client.get("/aksi/metrics")
         self.assertEqual(response.status_code, 200)
