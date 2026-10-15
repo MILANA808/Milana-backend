@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 import secrets
 import sqlite3
@@ -17,8 +18,43 @@ def _utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _hash_pw(password: str, salt: str) -> str:
+PASSWORD_HASH_ITERATIONS = 310_000
+PASSWORD_HASH_PREFIX = "pbkdf2_sha256"
+
+
+def _legacy_hash_pw(password: str, salt: str) -> str:
+    """Verify hashes created before PBKDF2 was introduced."""
     return hashlib.sha256(f"{password}|{salt}|{SEED}".encode()).hexdigest()
+
+
+def _hash_pw(password: str, salt: str) -> str:
+    """Create a slow, salted password hash suitable for stored credentials."""
+    salt_bytes = bytes.fromhex(salt)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt_bytes, PASSWORD_HASH_ITERATIONS
+    ).hex()
+    return f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}${digest}"
+
+
+def _verify_pw(password: str, salt: str, stored_hash: str) -> tuple[bool, bool]:
+    """Return (valid, needs_upgrade), supporting legacy SHA-256 hashes once."""
+    if stored_hash.startswith(f"{PASSWORD_HASH_PREFIX}$"):
+        try:
+            prefix, iterations_text, expected = stored_hash.split("$", 2)
+            if prefix != PASSWORD_HASH_PREFIX:
+                return False, False
+            iterations = int(iterations_text)
+            if iterations < 100_000 or iterations > 2_000_000:
+                return False, False
+            actual = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), bytes.fromhex(salt), iterations
+            ).hex()
+            return hmac.compare_digest(actual, expected), False
+        except (ValueError, TypeError):
+            return False, False
+    legacy = _legacy_hash_pw(password, salt)
+    valid = hmac.compare_digest(legacy, stored_hash)
+    return valid, valid
 
 
 @contextmanager
@@ -73,7 +109,7 @@ def register_user(username: str, password: str, email: str = "") -> Dict[str, An
         raise ValueError("username too short")
     if len(password) < 6:
         raise ValueError("password too short")
-    salt = secrets.token_hex(8)
+    salt = secrets.token_hex(16)
     uid = secrets.token_hex(12)
     did = f"did:aksi:user:{hashlib.sha256((username + uid).encode()).hexdigest()[:32]}"
     with connect() as c:
@@ -93,10 +129,19 @@ def login_user(username: str, password: str) -> Dict[str, Any]:
         row = c.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if not row or not row["is_active"]:
         raise ValueError("invalid credentials")
-    if _hash_pw(password, row["salt"]) != row["password_hash"]:
+    valid, needs_upgrade = _verify_pw(password, row["salt"], row["password_hash"])
+    if not valid:
         raise ValueError("invalid credentials")
     with connect() as c:
-        c.execute("UPDATE users SET last_login=? WHERE id=?", (_utc(), row["id"]))
+        if needs_upgrade:
+            # Upgrade old fast hashes after a successful login, without a password reset.
+            new_salt = secrets.token_hex(16)
+            c.execute(
+                "UPDATE users SET password_hash=?, salt=?, last_login=? WHERE id=?",
+                (_hash_pw(password, new_salt), new_salt, _utc(), row["id"]),
+            )
+        else:
+            c.execute("UPDATE users SET last_login=? WHERE id=?", (_utc(), row["id"]))
     return {
         "id": row["id"],
         "username": row["username"],
