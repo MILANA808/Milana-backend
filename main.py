@@ -236,8 +236,12 @@ async def readiness():
         "durable_tasks": TASK_STORE_AVAILABLE,
     }
     reasons = [f"missing_capability:{name}" for name, available in capabilities.items() if not available]
+    # A missing persistent signing key degrades identity continuity, but should not
+    # take the whole HTTP API offline. Report it separately so deploy health checks
+    # can distinguish an unavailable runtime from a key that needs configuration.
+    warnings = []
     if signing_key_mode in ("ephemeral", "unavailable"):
-        reasons.append(f"signing_identity_{signing_key_mode}")
+        warnings.append(f"signing_identity_{signing_key_mode}")
 
     ready = not reasons
     return JSONResponse(
@@ -246,6 +250,7 @@ async def readiness():
             "status": "ready" if ready else "not_ready",
             "ready": ready,
             "reasons": reasons,
+            "warnings": warnings,
             "capabilities": capabilities,
             "signing_key_mode": signing_key_mode,
         },
