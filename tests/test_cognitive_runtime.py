@@ -23,3 +23,17 @@ def test_candidate_score_rewards_evidence_and_domains():
     )
     assert 0 < good["total"] <= 1
     assert good["diversity"] > 0
+
+
+def test_safe_math_bounds_exponents_and_result_size():
+    assert safe_math("2 ^ 10") == 1024
+    assert safe_math("9 ** 9 ** 9") is None
+    assert safe_math("1000000 ** 12") is None
+    assert safe_math("2 ** 100000") is None
+    assert safe_math("2 ** (3 + 2)") is None
+
+
+def test_safe_math_keeps_normal_arithmetic():
+    assert safe_math("(12 + 8) * 3") == 60
+    assert safe_math("10 / 2") == 5
+    assert safe_math("7 % 4") == 3
