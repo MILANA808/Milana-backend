@@ -6,9 +6,10 @@ from typing import Any, Dict, List
 from urllib.parse import urlparse, urljoin
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel, Field
 from app.task_store import get as load_task, save as persist_task, list_recent, mark_recoverable
+from app.api.route_auth import require_user, require_task_owner
 from app.semantic_sampling import SemanticSampler, finalize as finalize_sampling
 
 router = APIRouter(prefix="/api/agent", tags=["AKSI Infinity Agent"])
@@ -286,11 +287,38 @@ async def enqueue(tid: str) -> None:
     await QUEUE.put(tid)
 
 @router.post("/tasks")
-async def create_task(body: TaskCreate):
+async def create_task(body: TaskCreate, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
     tid="aksi-task-"+secrets.token_hex(8)
-    t={"id":tid,"goal":body.goal,"status":"CREATED","created_at":now(),"updated_at":now(),"permissions":body.permissions.model_dump(),"max_sources":body.max_sources,"plan":[],"queries":[],"journal":[],"sources":[],"findings":[],"analysis":"","verification":{},"report":None,"receipt":None,"stop_requested":False,"sampling":SAMPLER.init()}
+    t={"id":tid,"owner_id":user_id,"goal":body.goal,"status":"CREATED","created_at":now(),"updated_at":now(),"permissions":body.permissions.model_dump(),"max_sources":body.max_sources,"plan":[],"queries":[],"journal":[],"sources":[],"findings":[],"analysis":"","verification":{},"report":None,"receipt":None,"stop_requested":False,"sampling":SAMPLER.init()}
     TASKS[tid]=t; persist_task(t); await enqueue(tid); return {"ok":True,"task":t}
 
+@router.get("/tasks/{task_id}")
+async def get_task(task_id:str, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    t=TASKS.get(task_id) or load_task(task_id)
+    require_task_owner(t, user_id)
+    TASKS[task_id]=t; return {"ok":True,"task":t}
+
+@router.get("/tasks")
+async def tasks(limit:int=20, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    owned=[t for t in list_recent(limit=100) if str(t.get("owner_id") or "") == user_id]
+    return {"ok":True,"tasks":owned[:max(1,min(limit,100))]}
+
+@router.get("/tasks/{task_id}/sampling")
+async def sampling(task_id:str, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    t=TASKS.get(task_id) or load_task(task_id)
+    require_task_owner(t, user_id)
+    return {"ok":True,"sampling":finalize_sampling(t),"checkpoints":(t.get("sampling") or {}).get("checkpoints",[])}
+
+@router.post("/tasks/{task_id}/stop")
+async def stop(task_id:str, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    t=TASKS.get(task_id) or load_task(task_id)
+    require_task_owner(t, user_id)
+    t["stop_requested"]=True; t["status"]="STOPPED"; event(t,"Выполнение остановлено пользователем.","stopped"); return {"ok":True,"task":t}
 @router.get("/tasks/{task_id}")
 async def get_task(task_id:str):
     t=TASKS.get(task_id) or load_task(task_id)
