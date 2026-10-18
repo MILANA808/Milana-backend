@@ -64,7 +64,7 @@ def test_approval_token_is_single_use():
         approver = login_test_user(client, "approver")
         response = client.post("/api/agent/tasks", json={"goal": "Проверить approval lifecycle", "permissions": {"internet": False}}, headers=owner)
         task_id = response.json()["task"]["id"]
-        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"}, owner)
         requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.interact", "reason": "explicit test approval"}, headers=owner)
         assert requested.status_code == 200
         approval_id = requested.json()["approval"]["id"]
@@ -86,7 +86,7 @@ def test_browser_approval_is_action_scoped_and_one_time():
         approver = login_test_user(client, "approver")
         response = client.post("/api/agent/tasks", json={"goal": "Проверить browser approval", "permissions": {"internet": False}}, headers=owner)
         task_id = response.json()["task"]["id"]
-        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"}, owner)
         requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click", "reason": "test click"}, headers=owner)
         approval_id = requested.json()["approval"]["id"]
         token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant", headers=approver).json()["token"]
@@ -114,7 +114,7 @@ def test_revoke_invalidates_token():
         approver = login_test_user(client, "approver")
         response = client.post("/api/agent/tasks", json={"goal": "Проверить revoke", "permissions": {"internet": False}}, headers=owner)
         task_id = response.json()["task"]["id"]
-        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"}, owner)
         requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click"}, headers=owner)
         approval_id = requested.json()["approval"]["id"]
         token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant", headers=approver).json()["token"]
