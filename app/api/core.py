@@ -58,7 +58,8 @@ async def request_approval(task_id:str,body:ApprovalRequest, authorization: str 
 async def grant_approval(task_id:str,approval_id:str, authorization: str | None = Header(None)):
     user_id = require_user(authorization)
     task = load_task(task_id)
-    require_task_owner(task, user_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
     token=await grant_token(task_id,approval_id, approver_id=user_id)
     return {"ok":True,"approval_id":approval_id,"status":"GRANTED","token":token}
 @router.post("/tasks/{task_id}/approval/{approval_id}/revoke")
