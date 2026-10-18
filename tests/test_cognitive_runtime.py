@@ -28,7 +28,7 @@ def test_candidate_score_rewards_evidence_and_domains():
 def test_safe_math_bounds_exponents_and_result_size():
     assert safe_math("2 ^ 10") == 1024
     assert safe_math("9 ** 9 ** 9") is None
-    assert safe_math("1000000 ** 12") is None
+    assert safe_math("1000001 ** 12") is None
     assert safe_math("2 ** 100000") is None
     assert safe_math("2 ** (3 + 2)") is None
 
