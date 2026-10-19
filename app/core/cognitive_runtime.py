@@ -34,6 +34,11 @@ def overlap(a: str, b: str) -> float:
 
 
 def safe_math(text: str):
+    """Evaluate a small arithmetic grammar with bounded work and result size.
+
+    Never use Python eval here: exponentiation and repeated multiplication can
+    otherwise consume unbounded CPU/memory even with builtins disabled.
+    """
     s = (text or "").strip().replace(",", ".")
     s = re.sub(r"(?i)(сколько|посчитай|вычисли|равно|чему равно)", "", s).strip()
     if not re.fullmatch(r"[0-9+*/().%\-\s^]+", s) or not re.search(r"[+*/%^]", s):
@@ -43,21 +48,62 @@ def safe_math(text: str):
         return None
     try:
         node = ast.parse(s, mode="eval")
-        allowed = (
-            ast.Expression, ast.Constant, ast.UnaryOp, ast.BinOp, ast.Add,
-            ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.USub,
-            ast.UAdd, ast.FloorDiv,
-        )
-        if any(type(n) not in allowed for n in ast.walk(node)):
+        nodes = list(ast.walk(node))
+        if len(nodes) > 64:
             return None
-        if any(
-            isinstance(n, ast.Constant)
-            and (not isinstance(n.value, (int, float)) or isinstance(n.value, bool))
-            for n in ast.walk(node)
-        ):
-            return None
-        value = eval(compile(node, "<aksi-math>", "eval"), {"__builtins__": {}}, {})
-        return value if isinstance(value, (int, float)) and math.isfinite(value) else None
+
+        def bounded(value):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError("unsupported number")
+            if isinstance(value, int):
+                if value.bit_length() > 1024:
+                    raise ValueError("integer result too large")
+            elif not math.isfinite(value) or abs(value) > 1e100:
+                raise ValueError("numeric result out of range")
+            return value
+
+        def evaluate(n):
+            if isinstance(n, ast.Expression):
+                return evaluate(n.body)
+            if isinstance(n, ast.Constant):
+                if isinstance(n.value, bool) or not isinstance(n.value, (int, float)):
+                    raise ValueError("invalid constant")
+                return bounded(n.value)
+            if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.USub, ast.UAdd)):
+                value = evaluate(n.operand)
+                return bounded(-value if isinstance(n.op, ast.USub) else value)
+            if isinstance(n, ast.BinOp):
+                left = evaluate(n.left)
+                right = evaluate(n.right)
+                if isinstance(n.op, ast.Pow):
+                    # Only a small, literal exponent is accepted. Reject chains
+                    # such as 9**9**9 and fractional/negative exponent tricks.
+                    if not isinstance(n.right, ast.Constant) or isinstance(n.right.value, bool):
+                        raise ValueError("exponent must be a numeric literal")
+                    exponent = n.right.value
+                    if not isinstance(exponent, (int, float)) or not math.isfinite(exponent):
+                        raise ValueError("invalid exponent")
+                    if abs(exponent) > 12 or abs(left) > 1e6:
+                        raise ValueError("exponentiation limit exceeded")
+                    if isinstance(left, int) and isinstance(exponent, int) and exponent >= 0 and left not in (-1, 0, 1):
+                        if abs(left) ** exponent > 2 ** 1024:
+                            raise ValueError("power result too large")
+                    return bounded(left ** exponent)
+                if isinstance(n.op, ast.Add): return bounded(left + right)
+                if isinstance(n.op, ast.Sub): return bounded(left - right)
+                if isinstance(n.op, ast.Mult): return bounded(left * right)
+                if isinstance(n.op, ast.Div):
+                    if right == 0: raise ZeroDivisionError()
+                    return bounded(left / right)
+                if isinstance(n.op, ast.FloorDiv):
+                    if right == 0: raise ZeroDivisionError()
+                    return bounded(left // right)
+                if isinstance(n.op, ast.Mod):
+                    if right == 0: raise ZeroDivisionError()
+                    return bounded(left % right)
+            raise ValueError("unsupported expression")
+
+        return evaluate(node)
     except Exception:
         return None
 
