@@ -11,11 +11,18 @@ from app.approval import consume_approval
 from main import app
 
 
-def wait_for_status(client, task_id, wanted, timeout=5):
+def login_test_user(client, prefix="aksi-test"):
+    username = f"{prefix}-{time.time_ns()}"
+    response = client.post("/api/register", json={"username": username, "password": "test-password-123", "email": ""})
+    assert response.status_code == 200, response.text
+    return {"Authorization": "Bearer " + response.json()["token"]}
+
+
+def wait_for_status(client, task_id, wanted, headers, timeout=5):
     deadline = time.time() + timeout
     last = None
     while time.time() < deadline:
-        response = client.get(f"/api/agent/tasks/{task_id}")
+        response = client.get(f"/api/agent/tasks/{task_id}", headers=headers)
         assert response.status_code == 200
         last = response.json()["task"]["status"]
         if last in wanted:
@@ -40,10 +47,11 @@ def test_health_and_core_runtime():
 def test_task_persists_and_requires_internet_permission():
     task_store.init()
     with TestClient(app) as client:
-        response = client.post("/api/agent/tasks", json={"goal": "Проверить lifecycle runtime", "permissions": {"internet": False, "read_pages": True}})
+        owner = login_test_user(client)
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить lifecycle runtime", "permissions": {"internet": False, "read_pages": True}}, headers=owner)
         assert response.status_code == 200
         task_id = response.json()["task"]["id"]
-        assert wait_for_status(client, task_id, {"NEEDS_PERMISSION"}) == "NEEDS_PERMISSION"
+        assert wait_for_status(client, task_id, {"NEEDS_PERMISSION"}, owner) == "NEEDS_PERMISSION"
         persisted = task_store.get(task_id)
         assert persisted is not None and persisted["id"] == task_id
         assert any("требуется разрешение" in x["message"] for x in persisted["journal"])
@@ -52,33 +60,37 @@ def test_task_persists_and_requires_internet_permission():
 def test_approval_token_is_single_use():
     task_store.init()
     with TestClient(app) as client:
-        response = client.post("/api/agent/tasks", json={"goal": "Проверить approval lifecycle", "permissions": {"internet": False}})
+        owner = login_test_user(client, "owner")
+        approver = login_test_user(client, "approver")
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить approval lifecycle", "permissions": {"internet": False}}, headers=owner)
         task_id = response.json()["task"]["id"]
-        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
-        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.interact", "reason": "explicit test approval"})
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"}, owner)
+        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.interact", "reason": "explicit test approval"}, headers=owner)
         assert requested.status_code == 200
         approval_id = requested.json()["approval"]["id"]
-        granted = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant")
+        granted = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant", headers=approver)
         assert granted.status_code == 200
         token = granted.json()["token"]
-        consumed = client.post(f"/api/core/tasks/{task_id}/approval/consume", json={"token": token})
+        consumed = client.post(f"/api/core/tasks/{task_id}/approval/consume", json={"token": token}, headers=owner)
         assert consumed.status_code == 200 and consumed.json()["action"] == "browser.interact"
-        replay = client.post(f"/api/core/tasks/{task_id}/approval/consume", json={"token": token})
+        replay = client.post(f"/api/core/tasks/{task_id}/approval/consume", json={"token": token}, headers=owner)
         assert replay.status_code == 403
-        approvals = client.get(f"/api/core/tasks/{task_id}/approvals")
+        approvals = client.get(f"/api/core/tasks/{task_id}/approvals", headers=owner)
         assert approvals.status_code == 200 and approvals.json()["approvals"][0]["status"] == "CONSUMED"
 
 
 def test_browser_approval_is_action_scoped_and_one_time():
     task_store.init()
     with TestClient(app) as client:
-        response = client.post("/api/agent/tasks", json={"goal": "Проверить browser approval", "permissions": {"internet": False}})
+        owner = login_test_user(client, "owner")
+        approver = login_test_user(client, "approver")
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить browser approval", "permissions": {"internet": False}}, headers=owner)
         task_id = response.json()["task"]["id"]
-        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
-        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click", "reason": "test click"})
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"}, owner)
+        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click", "reason": "test click"}, headers=owner)
         approval_id = requested.json()["approval"]["id"]
-        token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant").json()["token"]
-        wrong_action = client.post(f"/api/agent/browser/sessions/not-real/click", json={"selector": "#x", "approval_token": token})
+        token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant", headers=approver).json()["token"]
+        wrong_action = client.post(f"/api/agent/browser/sessions/not-real/click", json={"selector": "#x", "approval_token": token}, headers=owner)
         assert wrong_action.status_code == 404  # session validation happens before token consumption
         from app.approval import consume_approval
         import asyncio
@@ -98,13 +110,15 @@ def test_browser_approval_is_action_scoped_and_one_time():
 def test_revoke_invalidates_token():
     task_store.init()
     with TestClient(app) as client:
-        response = client.post("/api/agent/tasks", json={"goal": "Проверить revoke", "permissions": {"internet": False}})
+        owner = login_test_user(client, "owner")
+        approver = login_test_user(client, "approver")
+        response = client.post("/api/agent/tasks", json={"goal": "Проверить revoke", "permissions": {"internet": False}}, headers=owner)
         task_id = response.json()["task"]["id"]
-        wait_for_status(client, task_id, {"NEEDS_PERMISSION"})
-        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click"})
+        wait_for_status(client, task_id, {"NEEDS_PERMISSION"}, owner)
+        requested = client.post(f"/api/core/tasks/{task_id}/approval", json={"action": "browser.click"}, headers=owner)
         approval_id = requested.json()["approval"]["id"]
-        token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant").json()["token"]
-        revoked = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/revoke")
+        token = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/grant", headers=approver).json()["token"]
+        revoked = client.post(f"/api/core/tasks/{task_id}/approval/{approval_id}/revoke", headers=owner)
         assert revoked.status_code == 200
         import asyncio
         try:

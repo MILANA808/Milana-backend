@@ -17,17 +17,19 @@ def _task(task_id: str) -> Dict[str, Any]:
     task=load_task(task_id)
     if not task: raise HTTPException(404,"Task not found")
     return task
-async def request_approval(task_id:str,action:str,reason:str="") -> Dict[str,Any]:
+async def request_approval(task_id:str,action:str,reason:str="", requester_id:str|None=None) -> Dict[str,Any]:
     async with _LOCK:
-        task=_task(task_id); approval={"id":"approval-"+secrets.token_hex(8),"action":action,"reason":reason,"status":"PENDING","created_at":now()}
+        task=_task(task_id); approval={"id":"approval-"+secrets.token_hex(8),"action":action,"reason":reason,"status":"PENDING","requested_by":requester_id,"created_at":now()}
         task.setdefault("approvals",[]).append(approval); task["updated_at"]=now(); persist_task(task); return approval
-async def grant_approval(task_id:str,approval_id:str) -> str:
+async def grant_approval(task_id:str,approval_id:str, approver_id:str|None=None) -> str:
     async with _LOCK:
         task=_task(task_id)
         for approval in task.get("approvals",[]):
             if approval.get("id")==approval_id:
                 if approval.get("status")!="PENDING": raise HTTPException(409,"Approval is not pending")
-                token="aksi-approval-"+secrets.token_urlsafe(24); approval.update({"status":"GRANTED","token_hash":token_hash(token),"granted_at":now()}); task["updated_at"]=now(); persist_task(task); return token
+                if approver_id and approval.get("requested_by") and approver_id == approval.get("requested_by"):
+                    raise HTTPException(403,"Approval requester cannot approve their own request")
+                token="aksi-approval-"+secrets.token_urlsafe(24); approval.update({"status":"GRANTED","approver_id":approver_id,"token_hash":token_hash(token),"granted_at":now()}); task["updated_at"]=now(); persist_task(task); return token
         raise HTTPException(404,"Approval not found")
 async def revoke_approval(task_id:str,approval_id:str) -> None:
     async with _LOCK:

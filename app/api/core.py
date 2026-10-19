@@ -2,9 +2,10 @@
 from __future__ import annotations
 import asyncio, importlib, json
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from app.api.route_auth import require_user, require_task_owner
 from app.task_store import get as load_task
 from app.approval import request_approval as create_approval, grant_approval as grant_token, revoke_approval as revoke_token, public_approvals, consume_approval
 router=APIRouter(prefix="/api/core",tags=["AKSI Core"])
@@ -30,8 +31,10 @@ async def diagnostics_modules():
         except Exception as exc: result[name]={"ok":False,"error_type":type(exc).__name__,"error":str(exc)[:500]}
     return {"ok":all(item["ok"] for item in result.values()),"modules":result}
 @router.get("/tasks/{task_id}/events")
-async def events(task_id:str):
-    if not load_task(task_id): raise HTTPException(404,"Task not found")
+async def events(task_id:str, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    task = load_task(task_id)
+    require_task_owner(task, user_id)
     async def stream():
         sent=0; idle=0
         while idle<30:
@@ -45,20 +48,37 @@ async def events(task_id:str):
             yield ": keepalive\n\n"; idle+=1; await asyncio.sleep(1)
     return StreamingResponse(stream(),media_type="text/event-stream",headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
 @router.post("/tasks/{task_id}/approval")
-async def request_approval(task_id:str,body:ApprovalRequest):
-    approval=await create_approval(task_id,body.action,body.reason)
+async def request_approval(task_id:str,body:ApprovalRequest, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    task = load_task(task_id)
+    require_task_owner(task, user_id)
+    approval=await create_approval(task_id,body.action,body.reason, requester_id=user_id)
     return {"ok":True,"approval":approval}
 @router.post("/tasks/{task_id}/approval/{approval_id}/grant")
-async def grant_approval(task_id:str,approval_id:str):
-    token=await grant_token(task_id,approval_id)
+async def grant_approval(task_id:str,approval_id:str, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    task = load_task(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    token=await grant_token(task_id,approval_id, approver_id=user_id)
     return {"ok":True,"approval_id":approval_id,"status":"GRANTED","token":token}
 @router.post("/tasks/{task_id}/approval/{approval_id}/revoke")
-async def revoke_approval(task_id:str,approval_id:str):
+async def revoke_approval(task_id:str,approval_id:str, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    task = load_task(task_id)
+    require_task_owner(task, user_id)
     await revoke_token(task_id,approval_id)
     return {"ok":True,"approval_id":approval_id,"status":"REVOKED"}
 @router.get("/tasks/{task_id}/approvals")
-async def approvals(task_id:str): return {"ok":True,"approvals":public_approvals(task_id)}
+async def approvals(task_id:str, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    task = load_task(task_id)
+    require_task_owner(task, user_id)
+    return {"ok":True,"approvals":public_approvals(task_id)}
 @router.post("/tasks/{task_id}/approval/consume")
-async def consume_approval_route(task_id:str,body:ApprovalUse):
+async def consume_approval_route(task_id:str,body:ApprovalUse, authorization: str | None = Header(None)):
+    user_id = require_user(authorization)
+    task = load_task(task_id)
+    require_task_owner(task, user_id)
     approval=await consume_approval(task_id,body.token,"*")
     return {"ok":True,"approval_id":approval["id"],"action":approval["action"]}
