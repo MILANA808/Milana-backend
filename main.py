@@ -212,12 +212,10 @@ async def root():
 
 @app.get("/health")
 async def health():
-    try:
-        from app.core.crypto import get_crypto
-        signing_key_mode = get_crypto().key_source
-    except Exception:
-        signing_key_mode = "unavailable"
-    return {"status":"healthy","version":VERSION,"timestamp":datetime.now(timezone.utc).isoformat(),"core":"app.api.core" in ROUTERS,"web_agent":"app.api.web_agent" in ROUTERS,"browser_agent":"app.api.browser_agent" in ROUTERS,"discovery_runtime":"app.api.discovery" in ROUTERS,"durable_tasks":TASK_STORE_AVAILABLE,"seal_middleware":SEAL_MIDDLEWARE,"signing_key_mode":signing_key_mode,"router_errors":ROUTER_ERRORS}
+    # Liveness must stay dependency-free: do not initialize crypto, touch storage,
+    # or inspect optional capabilities while the platform is deciding whether the
+    # process is alive. Detailed capability checks belong to /ready.
+    return {"status":"healthy","version":VERSION}
 @app.get("/ready")
 async def readiness():
     """Readiness check: unlike liveness, this fails when required runtime capabilities are unavailable."""
