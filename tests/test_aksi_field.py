@@ -18,7 +18,7 @@ def test_counterfactuals_are_bounded():
     f=DynamicField(); f.step('state'); xs=f.counterfactual(['a','b','c','d','e','f','g','h','i'])
     assert len(xs)==8
 
-def test_session_persists_trajectory():
+def test_session_keeps_trajectory_within_process():
     from app.core.aksi_field import run_field
     sid="test-persistent-field"
     a=run_field("alpha beta",session_id=sid)
