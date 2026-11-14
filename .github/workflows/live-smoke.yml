@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Wait for Render deploy and probe public API
+      - name: Wake free instance, then probe public API
         env:
           AKSI_BASE_URL: https://aksi-backend.onrender.com
         run: |
@@ -29,44 +29,59 @@ jobs:
           import os
           import sys
           import time
-          import urllib.error
           import urllib.request
 
           base = os.environ["AKSI_BASE_URL"].rstrip("/")
+
+          def get_json(path, timeout):
+              req = urllib.request.Request(
+                  base + path,
+                  headers={"User-Agent": "AKSI-live-smoke/1.1", "Accept": "application/json"},
+              )
+              with urllib.request.urlopen(req, timeout=timeout) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+                  if response.status != 200:
+                      raise RuntimeError(f"HTTP {response.status}: {payload}")
+                  return payload
+
+          # Render Free instances sleep after 15 minutes idle and can need about
+          # one minute to wake. Do not mistake a normal cold start for an outage.
+          health = None
+          for attempt in range(1, 4):
+              try:
+                  print(f"Wake-up attempt {attempt}/3: GET /health (timeout 120s)")
+                  health = get_json("/health", timeout=120)
+                  if health.get("status") != "healthy":
+                      raise RuntimeError(f"/health contract mismatch: {health}")
+                  print(f"PASS /health version={health.get('version')}")
+                  break
+              except Exception as exc:
+                  print(f"WAKE-UP FAILED: {type(exc).__name__}: {str(exc)[:300]}")
+                  if attempt == 3:
+                      print("AKSI LIVE BACKEND: UNAVAILABLE after cold-start retries")
+                      sys.exit(1)
+                  time.sleep(20)
+
           checks = {
-              "/health": lambda d: d.get("status") == "healthy",
               "/ready": lambda d: d.get("ready") is True,
               "/aksi/cluster/status": lambda d: d.get("kind") == "classical-cpu-simulation",
               "/api/core/runtime": lambda d: d.get("ok") is True,
           }
           failures = {}
-          for attempt in range(1, 7):
-              failures = {}
-              print(f"Probe attempt {attempt}/6: {base}")
-              for path, validate in checks.items():
-                  try:
-                      req = urllib.request.Request(
-                          base + path,
-                          headers={"User-Agent": "AKSI-live-smoke/1.0", "Accept": "application/json"},
-                      )
-                      with urllib.request.urlopen(req, timeout=12) as response:
-                          payload = json.loads(response.read().decode("utf-8"))
-                          if response.status != 200 or not validate(payload):
-                              failures[path] = {
-                                  "http_status": response.status,
-                                  "body": payload,
-                                  "reason": "response did not satisfy endpoint contract",
-                              }
-                          else:
-                              print(f"PASS {path} ({response.status})")
-                  except Exception as exc:
-                      failures[path] = {"error": type(exc).__name__, "message": str(exc)[:300]}
-              if not failures:
-                  print("AKSI LIVE BACKEND: ALL CHECKS PASSED")
-                  sys.exit(0)
+          for path, validate in checks.items():
+              try:
+                  payload = get_json(path, timeout=30)
+                  if not validate(payload):
+                      failures[path] = {"reason": "response did not satisfy endpoint contract", "body": payload}
+                  else:
+                      print(f"PASS {path}")
+              except Exception as exc:
+                  failures[path] = {"error": type(exc).__name__, "message": str(exc)[:300]}
+
+          if failures:
+              print("AKSI LIVE BACKEND: FAILED")
               print(json.dumps(failures, ensure_ascii=False, indent=2))
-              if attempt < 6:
-                  time.sleep(15)
-          print("AKSI LIVE BACKEND: FAILED after retries")
-          sys.exit(1)
+              sys.exit(1)
+
+          print("AKSI LIVE BACKEND: ALL CHECKS PASSED")
           PY
