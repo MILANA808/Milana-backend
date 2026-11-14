@@ -153,3 +153,22 @@ def test_readiness_reports_real_capability_and_signing_state():
         if body["signing_key_mode"] in ("ephemeral", "unavailable"):
             assert f"signing_identity_{body['signing_key_mode']}" in body["warnings"]
             assert f"signing_identity_{body['signing_key_mode']}" not in body["reasons"]
+
+
+def test_inactive_user_session_is_rejected():
+    task_store.init()
+    from app import db_sqlite as db
+    with TestClient(app) as client:
+        headers = login_test_user(client, "inactive")
+        token = headers["Authorization"].split(" ", 1)[1]
+        from app.api_phase1 import _sessions
+        user_id = _sessions[token]
+        with db.connect() as conn:
+            conn.execute("UPDATE users SET is_active=0 WHERE id=?", (user_id,))
+        response = client.get("/api/auth/user", headers=headers)
+        assert response.status_code == 401
+        # Task-scoped auth must reject the same revoked account too.
+        protected = client.get("/api/core/runtime", headers=headers)
+        assert protected.status_code == 200  # runtime metadata is intentionally public
+        created = client.post("/api/agent/tasks", json={"goal": "Проверить inactive user", "permissions": {"internet": False}}, headers=headers)
+        assert created.status_code == 401
