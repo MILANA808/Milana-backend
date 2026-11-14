@@ -7,8 +7,7 @@ def test_opportunity_engine_route():
 
 def test_universal_route_exposes_field():
     from main import app
-    routes = {(getattr(r, "path", ""), getattr(r, "methods", set())) for r in app.routes}
-    assert any(path == "/api/universal" and "POST" in methods for path, methods in routes)
+    assert any(getattr(r, "path", "") == "/api/universal" and "POST" in (getattr(r, "methods", set()) or set()) for r in app.routes)
 
 def test_query_generation():
     from app.api.opportunity import OpportunityRequest, query_set
