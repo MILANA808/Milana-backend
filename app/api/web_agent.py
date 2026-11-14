@@ -270,12 +270,23 @@ async def _worker() -> None:
         try: await execute(tid)
         finally: QUEUE.task_done()
 
+async def _recover_queue(queue: asyncio.Queue[str]) -> None:
+    """Recover interrupted tasks off the event loop so HTTP startup stays responsive."""
+    try:
+        recovered = await asyncio.to_thread(mark_recoverable)
+        for task in recovered:
+            await queue.put(task["id"])
+    except Exception as exc:
+        # Recovery failure must be visible; it must not silently disable the API.
+        import logging
+        logging.getLogger("aksi.worker").exception("Failed to recover interrupted tasks: %s", exc)
+
 async def start_worker() -> None:
     global WORKER_TASK,QUEUE
     if WORKER_TASK and not WORKER_TASK.done(): return
     QUEUE=asyncio.Queue()
-    for t in mark_recoverable(): await QUEUE.put(t["id"])
     WORKER_TASK=asyncio.create_task(_worker(),name="aksi-infinity-worker")
+    asyncio.create_task(_recover_queue(QUEUE), name="aksi-task-recovery")
 
 def stop_worker() -> None:
     global WORKER_TASK,QUEUE
