@@ -1,6 +1,6 @@
 """AKSI backend — canonical application bootstrap."""
 from __future__ import annotations
-import hashlib, json, os, re, secrets
+import asyncio, hashlib, json, logging, os, re, secrets
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 VERSION = "0.10.0"
 CODEX = {"version":"1.0","title":"Кодекс Суверенного ИИ АКСИ","rules":["Не выдумывать факты; указывать источники","Признавать неуверенность","Не выполнять вредоносные действия","Identity (DID) — ответственность, не маркетинг"],"url":"https://milana808.github.io/CODEX.md"}
 BLOCK_PATTERNS = [(re.compile(r"как\s+(сделать|собрать).{0,40}(бомб|взрывчат|отрав)",re.I),"вред"),(re.compile(r"how\s+to\s+(make|build).{0,40}(bomb|explosive)",re.I),"harm")]
+logger = logging.getLogger("aksi.bootstrap")
 app = FastAPI(title="Milana-backend (AKSI)", description="AKSI Core · sovereign AI · Infinity · browser · evidence · receipt", version=VERSION)
 _origins=[x.strip() for x in os.getenv("AKSI_CORS_ORIGINS","https://milana808.github.io,http://localhost:8000,http://127.0.0.1:8000").split(",") if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=_origins,allow_credentials=False,allow_methods=["*"],allow_headers=["*"])
@@ -155,12 +156,18 @@ aksi_metrics={"eqs":0.72,"empathy_boost":0.25,"grid_system":"3x3","status":"acti
 
 @app.on_event("startup")
 async def startup():
-    if TASK_STORE_AVAILABLE and task_store_init: task_store_init()
+    if TASK_STORE_AVAILABLE and task_store_init:
+        try:
+            await asyncio.to_thread(task_store_init)
+        except Exception:
+            logger.exception("AKSI task-store initialization failed")
+            raise
     try:
         from app.api.web_agent import start_worker
         await start_worker()
     except Exception:
-        pass
+        # Keep liveness available, but never hide a failed worker startup.
+        logger.exception("AKSI background worker failed to start")
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -168,7 +175,7 @@ async def shutdown():
         from app.api.web_agent import stop_worker
         stop_worker()
     except Exception:
-        pass
+        logger.exception("AKSI background worker shutdown failed")
 
 class EchoRequest(BaseModel): message:str
 class ProofStableRequest(BaseModel): signature:str; timestamp:Optional[str]=None; metrics:Optional[dict]=None
