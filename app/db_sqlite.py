@@ -162,6 +162,7 @@ def get_user(user_id: str) -> Optional[Dict[str, Any]]:
         "did": row["did"],
         "email": row["email"],
         "bio": row["bio"] or "",
+        "is_active": bool(row["is_active"]),
     }
 
 
