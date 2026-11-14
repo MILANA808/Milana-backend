@@ -218,7 +218,7 @@ async def health():
     has_file_key = os.path.isfile(os.path.join(key_dir, "aksi_private_ed25519.pem"))
     if os.getenv("AKSI_PRIVATE_KEY_B64", "").strip():
         signing_key_mode = "environment"
-    elif has_file_key or (os.getenv("AKSI_PERSIST_KEYS") == "1" and os.path.isdir(key_dir)):
+    elif has_file_key:
         signing_key_mode = "file"
     else:
         signing_key_mode = "ephemeral"
