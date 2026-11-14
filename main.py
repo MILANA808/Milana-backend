@@ -212,10 +212,22 @@ async def root():
 
 @app.get("/health")
 async def health():
-    # Liveness must stay dependency-free: do not initialize crypto, touch storage,
-    # or inspect optional capabilities while the platform is deciding whether the
-    # process is alive. Detailed capability checks belong to /ready.
-    return {"status":"healthy","version":VERSION}
+    # Keep liveness cheap: report key persistence from configuration only.
+    # Do not generate keys, access SQLite, or load optional runtime capabilities here.
+    key_dir = os.getenv("AKSI_KEY_DIR", ".aksi_keys")
+    has_file_key = os.path.isfile(os.path.join(key_dir, "aksi_private_ed25519.pem"))
+    if os.getenv("AKSI_PRIVATE_KEY_B64", "").strip():
+        signing_key_mode = "environment"
+    elif has_file_key or (os.getenv("AKSI_PERSIST_KEYS") == "1" and os.path.isdir(key_dir)):
+        signing_key_mode = "file"
+    else:
+        signing_key_mode = "ephemeral"
+    return {
+        "status": "healthy",
+        "version": VERSION,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "signing_key_mode": signing_key_mode,
+    }
 @app.get("/ready")
 async def readiness():
     """Readiness check: unlike liveness, this fails when required runtime capabilities are unavailable."""
