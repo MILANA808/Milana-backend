@@ -127,8 +127,9 @@ async def auth_user(authorization: Optional[str] = Header(None)):
     if not uid:
         raise HTTPException(401, "invalid session")
     user = db.get_user(uid)
-    if not user:
-        raise HTTPException(401, "user gone")
+    if not user or not user.get("is_active", 1):
+        _sessions.pop(authorization[7:], None)
+        raise HTTPException(401, "user gone or inactive")
     return user
 
 
