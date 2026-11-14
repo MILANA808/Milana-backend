@@ -3,7 +3,7 @@ services:
     name: aksi-backend
     runtime: docker
     plan: free
-    healthCheckPath: /ready
+    healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
       - key: PYTHONUNBUFFERED
