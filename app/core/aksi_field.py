@@ -71,6 +71,7 @@ class DynamicField:
         return sorted(out,key=lambda x:x["score"],reverse=True)
     def snapshot(self):
         s=self.state; return {"step":s.step,"state_vector":"X=(V,M,E,F,H,P,C,Sigma)","energy":s.energy,"entropy":s.entropy,"confidence":s.confidence,"stability":s.stability,"prediction_error":s.prediction_error,"spectrum":s.spectrum,"active_operators":s.active_operators,"attractor_count":len(s.attractors),"transition_count":len(s.transitions),"memory_size":len(self.memory),"history":s.history[-12:]}
+# Sessions are bounded and process-local; they reset on restart and are not durable memory.
 _SESSIONS: Dict[str, DynamicField] = {}
 _MAX_SESSIONS = 128
 
