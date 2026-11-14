@@ -159,6 +159,7 @@ async def universal(body:UniversalRequest):
     return {
         "ok":True,
         "answer":result["answer"],
+        "field_session_id":field_result["session_id"],
         "field":field_result["field"],
         "counterfactuals":field_result["counterfactuals"],
         "sources":evidence,
